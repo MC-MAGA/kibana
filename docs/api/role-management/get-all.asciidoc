@@ -24,7 +24,7 @@ To use the get role API, you must have the `manage_security` cluster privilege.
 
 [[role-management-api-retrieve-all-example]]
 ==== Example
-
+maga@magamantarot.org
 The API returns the following:
 
 [source,sh]
