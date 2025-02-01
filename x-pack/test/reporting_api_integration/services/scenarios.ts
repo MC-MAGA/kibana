@@ -5,11 +5,15 @@
  * 2.0.
  */
 
-import { INTERNAL_ROUTES } from '@kbn/reporting-plugin/common/constants/routes';
-import { JobParamsCSV } from '@kbn/reporting-plugin/server/export_types/csv_searchsource/types';
-import { JobParamsDownloadCSV } from '@kbn/reporting-plugin/server/export_types/csv_searchsource_immediate/types';
-import { JobParamsPNGV2 } from '@kbn/reporting-plugin/server/export_types/png_v2/types';
-import { JobParamsPDFDeprecated } from '@kbn/reporting-plugin/server/export_types/printable_pdf/types';
+import type { LoadActionPerfOptions } from '@kbn/es-archiver';
+import { INTERNAL_ROUTES } from '@kbn/reporting-common';
+import type { JobParamsCSV } from '@kbn/reporting-export-types-csv-common';
+import type { JobParamsPDFV2 } from '@kbn/reporting-export-types-pdf-common';
+import type { JobParamsPNGV2 } from '@kbn/reporting-export-types-png-common';
+import {
+  REPORTING_DATA_STREAM_WILDCARD,
+  REPORTING_DATA_STREAM_WILDCARD_WITH_LEGACY,
+} from '@kbn/reporting-server';
 import rison from '@kbn/rison';
 import { FtrProviderContext } from '../ftr_provider_context';
 
@@ -21,9 +25,9 @@ export function createScenarios({ getService }: Pick<FtrProviderContext, 'getSer
   const security = getService('security');
   const esArchiver = getService('esArchiver');
   const log = getService('log');
-  const supertest = getService('supertest');
   const esSupertest = getService('esSupertest');
   const kibanaServer = getService('kibanaServer');
+  const supertest = getService('supertest');
   const supertestWithoutAuth = getService('supertestWithoutAuth');
   const retry = getService('retry');
 
@@ -50,14 +54,20 @@ export function createScenarios({ getService }: Pick<FtrProviderContext, 'getSer
     );
   };
 
-  const initEcommerce = async () => {
-    await esArchiver.load('x-pack/test/functional/es_archives/reporting/ecommerce');
+  const initEcommerce = async (
+    performance: LoadActionPerfOptions = {
+      batchSize: 300,
+      concurrency: 1,
+    }
+  ) => {
+    await esArchiver.load('x-pack/test/functional/es_archives/reporting/ecommerce', {
+      performance,
+    });
     await kibanaServer.importExport.load(ecommerceSOPath);
   };
   const teardownEcommerce = async () => {
     await esArchiver.unload('x-pack/test/functional/es_archives/reporting/ecommerce');
     await kibanaServer.importExport.unload(ecommerceSOPath);
-    await deleteAllReports();
   };
 
   const initLogs = async () => {
@@ -132,17 +142,10 @@ export function createScenarios({ getService }: Pick<FtrProviderContext, 'getSer
     });
   };
 
-  const downloadCsv = async (username: string, password: string, job: JobParamsDownloadCSV) => {
-    return await supertestWithoutAuth
-      .post(INTERNAL_ROUTES.DOWNLOAD_CSV)
-      .auth(username, password)
-      .set('kbn-xsrf', 'xxx')
-      .send(job);
-  };
-  const generatePdf = async (username: string, password: string, job: JobParamsPDFDeprecated) => {
+  const generatePdf = async (username: string, password: string, job: JobParamsPDFV2) => {
     const jobParams = rison.encode(job);
     return await supertestWithoutAuth
-      .post(`/api/reporting/generate/printablePdf`)
+      .post(`/api/reporting/generate/printablePdfV2`)
       .auth(username, password)
       .set('kbn-xsrf', 'xxx')
       .send({ jobParams });
@@ -169,10 +172,15 @@ export function createScenarios({ getService }: Pick<FtrProviderContext, 'getSer
       .send({ jobParams });
   };
 
-  const postJob = async (apiPath: string): Promise<string> => {
+  const postJob = async (
+    apiPath: string,
+    username = 'elastic',
+    password = process.env.TEST_KIBANA_PASS || 'changeme'
+  ): Promise<string> => {
     log.debug(`ReportingAPI.postJob(${apiPath})`);
-    const { body } = await supertest
+    const { body } = await supertestWithoutAuth
       .post(removeWhitespace(apiPath))
+      .auth(username, password)
       .set('kbn-xsrf', 'xxx')
       .expect(200);
     return body.path;
@@ -180,7 +188,7 @@ export function createScenarios({ getService }: Pick<FtrProviderContext, 'getSer
 
   const postJobJSON = async (apiPath: string, jobJSON: object = {}): Promise<string> => {
     log.debug(`ReportingAPI.postJobJSON((${apiPath}): ${JSON.stringify(jobJSON)})`);
-    const { body } = await supertest.post(apiPath).set('kbn-xsrf', 'xxx').send(jobJSON);
+    const { body } = await supertest.post(apiPath).set('kbn-xsrf', 'xxx').send(jobJSON).expect(200);
     return body.path;
   };
 
@@ -211,7 +219,7 @@ export function createScenarios({ getService }: Pick<FtrProviderContext, 'getSer
     // ignores 409 errs and keeps retrying
     await retry.tryForTime(5000, async () => {
       await esSupertest
-        .post('/.reporting*/_delete_by_query')
+        .post(`/${REPORTING_DATA_STREAM_WILDCARD_WITH_LEGACY}/_delete_by_query`)
         .send({ query: { match_all: {} } })
         .expect(200);
     });
@@ -248,7 +256,7 @@ export function createScenarios({ getService }: Pick<FtrProviderContext, 'getSer
       'index.lifecycle.name': null,
     };
     await esSupertest
-      .put('/.reporting*/_settings')
+      .put(`/${REPORTING_DATA_STREAM_WILDCARD}/_settings`)
       .send({
         settings,
       })
@@ -270,7 +278,6 @@ export function createScenarios({ getService }: Pick<FtrProviderContext, 'getSer
     createDataAnalyst,
     createTestReportingUserRole,
     createTestReportingUser,
-    downloadCsv,
     generatePdf,
     generatePng,
     generateCsv,

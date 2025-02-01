@@ -6,9 +6,12 @@
  */
 
 import { openJsonTab } from '../../../../tasks/expandable_flyout/alert_details_right_panel';
-import { expandFirstAlertExpandableFlyout } from '../../../../tasks/expandable_flyout/common';
-import { DOCUMENT_DETAILS_FLYOUT_JSON_TAB_CONTENT } from '../../../../screens/expandable_flyout/alert_details_right_panel_json_tab';
-import { cleanKibana } from '../../../../tasks/common';
+import { expandAlertAtIndexExpandableFlyout } from '../../../../tasks/expandable_flyout/common';
+import {
+  DOCUMENT_DETAILS_FLYOUT_JSON_TAB_CONTENT,
+  DOCUMENT_DETAILS_FLYOUT_JSON_TAB_COPY_TO_CLIPBOARD_BUTTON,
+} from '../../../../screens/expandable_flyout/alert_details_right_panel_json_tab';
+import { deleteAlertsAndRules } from '../../../../tasks/api_calls/common';
 import { login } from '../../../../tasks/login';
 import { visit } from '../../../../tasks/navigation';
 import { createRule } from '../../../../tasks/api_calls/rules';
@@ -21,17 +24,23 @@ describe(
   { tags: ['@ess', '@serverless'] },
   () => {
     beforeEach(() => {
-      cleanKibana();
+      deleteAlertsAndRules();
       login();
       createRule(getNewRule());
       visit(ALERTS_URL);
       waitForAlertsToPopulate();
-      expandFirstAlertExpandableFlyout();
+      expandAlertAtIndexExpandableFlyout();
       openJsonTab();
     });
 
     it('should display the json component', () => {
-      cy.get(DOCUMENT_DETAILS_FLYOUT_JSON_TAB_CONTENT).should('exist');
+      cy.get(DOCUMENT_DETAILS_FLYOUT_JSON_TAB_COPY_TO_CLIPBOARD_BUTTON).should(
+        'have.text',
+        'Copy to clipboard'
+      );
+      cy.get(DOCUMENT_DETAILS_FLYOUT_JSON_TAB_CONTENT)
+        .should('contain.text', '_index')
+        .and('contain.text', '_id');
     });
   }
 );

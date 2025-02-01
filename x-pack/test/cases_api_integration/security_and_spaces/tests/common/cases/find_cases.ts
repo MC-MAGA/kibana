@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { v1 as uuidv1 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 
 import expect from '@kbn/expect';
 import {
@@ -62,7 +62,6 @@ export default ({ getService }: FtrProviderContext): void => {
   const supertest = getService('supertest');
   const es = getService('es');
   const supertestWithoutAuth = getService('supertestWithoutAuth');
-  const esArchiver = getService('esArchiver');
   const kibanaServer = getService('kibanaServer');
 
   describe('find_cases', () => {
@@ -155,6 +154,36 @@ export default ({ getService }: FtrProviderContext): void => {
         });
       });
 
+      it('filter by multiple status', async () => {
+        const openCase = await createCase(supertest, postCaseReq);
+        const toCloseCase = await createCase(supertest, postCaseReq);
+        const closedCases = await updateCase({
+          supertest,
+          params: {
+            cases: [
+              {
+                id: toCloseCase.id,
+                version: toCloseCase.version,
+                status: CaseStatuses.closed,
+              },
+            ],
+          },
+        });
+
+        const cases = await findCases({
+          supertest,
+          query: { status: [CaseStatuses.closed, CaseStatuses.open] },
+        });
+
+        expect(cases).to.eql({
+          ...findCasesResp,
+          total: 2,
+          cases: [openCase, closedCases[0]],
+          count_open_cases: 1,
+          count_closed_cases: 1,
+        });
+      });
+
       it('filters by severity', async () => {
         await createCase(supertest, postCaseReq);
         const theCase = await createCase(supertest, postCaseReq);
@@ -191,6 +220,26 @@ export default ({ getService }: FtrProviderContext): void => {
           ...findCasesResp,
           total: 0,
           cases: [],
+        });
+      });
+
+      it('filters by multiple severities', async () => {
+        const lowSeverityCase = await createCase(supertest, postCaseReq);
+        const criticalSeverityCase = await createCase(supertest, {
+          ...postCaseReq,
+          severity: CaseSeverity.CRITICAL,
+        });
+
+        const cases = await findCases({
+          supertest,
+          query: { severity: [CaseSeverity.LOW, CaseSeverity.CRITICAL] },
+        });
+
+        expect(cases).to.eql({
+          ...findCasesResp,
+          total: 2,
+          cases: [lowSeverityCase, criticalSeverityCase],
+          count_open_cases: 2,
         });
       });
 
@@ -387,7 +436,7 @@ export default ({ getService }: FtrProviderContext): void => {
         });
 
         it('should successfully find a case with a valid uuid in title', async () => {
-          const uuid = uuidv1();
+          const uuid = uuidv4();
           await createCase(supertest, { ...postCaseReq, title: uuid });
 
           const cases = await findCases({
@@ -400,7 +449,7 @@ export default ({ getService }: FtrProviderContext): void => {
         });
 
         it('should successfully find a case with a valid uuid in description', async () => {
-          const uuid = uuidv1();
+          const uuid = uuidv4();
           await createCase(supertest, { ...postCaseReq, description: uuid });
 
           const cases = await findCases({
@@ -510,16 +559,11 @@ export default ({ getService }: FtrProviderContext): void => {
     });
 
     describe('alerts', () => {
-      const defaultSignalsIndex = '.siem-signals-default-000001';
+      const defaultSignalsIndex = 'siem-signals-default-000001';
       const signalID = '4679431ee0ba3209b6fcd60a255a696886fe0a7d18f5375de510ff5b68fa6b78';
       const signalID2 = '1023bcfea939643c5e51fd8df53797e0ea693cee547db579ab56d96402365c1e';
 
-      beforeEach(async () => {
-        await esArchiver.load('x-pack/test/functional/es_archives/cases/signals/default');
-      });
-
       afterEach(async () => {
-        await esArchiver.unload('x-pack/test/functional/es_archives/cases/signals/default');
         await deleteAllCaseItems(es);
       });
 
@@ -542,11 +586,6 @@ export default ({ getService }: FtrProviderContext): void => {
               owner: 'securitySolutionFixture',
             },
           });
-
-          // There is potential for the alert index to not be refreshed by the time the second comment is created
-          // which could attempt to update the alert status again and will encounter a conflict so this will
-          // ensure that the index is up to date before we try to update the next alert status
-          await es.indices.refresh({ index: defaultSignalsIndex });
         }
 
         const patchedCase = await createComment({

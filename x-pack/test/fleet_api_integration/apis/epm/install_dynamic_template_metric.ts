@@ -8,30 +8,33 @@
 import expect from '@kbn/expect';
 import { FtrProviderContext } from '../../../api_integration/ftr_provider_context';
 import { skipIfNoDockerRegistry } from '../../helpers';
-import { setupFleetAndAgents } from '../agents/services';
 
 export default function (providerContext: FtrProviderContext) {
   const { getService } = providerContext;
   const supertest = getService('supertest');
   const es = getService('es');
+  const fleetAndAgents = getService('fleetAndAgents');
 
   const deletePackage = async (name: string, version: string) => {
     await supertest.delete(`/api/fleet/epm/packages/${name}/${version}`).set('kbn-xsrf', 'xxxx');
   };
 
-  describe('metric_type with dynamic_templates', async () => {
+  describe('metric_type with dynamic_templates', () => {
     skipIfNoDockerRegistry(providerContext);
-    setupFleetAndAgents(providerContext);
+
+    before(async () => {
+      await fleetAndAgents.setup();
+    });
 
     after(async () => {
-      await deletePackage('istio', '0.3.3');
+      await deletePackage('no_tsdb_to_tsdb', '0.2.0');
     });
 
     it('should install with metric_type added as time_series_metric', async function () {
-      const templateName = 'metrics-istio.istiod_metrics@package';
+      const templateName = 'metrics-no_tsdb_to_tsdb.test@package';
 
       await supertest
-        .post(`/api/fleet/epm/packages/istio/0.3.3`)
+        .post(`/api/fleet/epm/packages/no_tsdb_to_tsdb/0.2.0`)
         .set('kbn-xsrf', 'xxxx')
         .send({ force: true })
         .expect(200);
@@ -46,7 +49,7 @@ export default function (providerContext: FtrProviderContext) {
 
       const template = resp.component_templates[0].component_template;
       const dynamicTemplates = template.template.mappings.dynamic_templates;
-      const mappingName = 'istio.istiod.metrics.*.counter';
+      const mappingName = 'test.metrics.*.counter';
       const counter = dynamicTemplates.find((tmpl: any) => Object.keys(tmpl)[0] === mappingName);
 
       expect(counter[mappingName].mapping.time_series_metric).to.eql('counter');

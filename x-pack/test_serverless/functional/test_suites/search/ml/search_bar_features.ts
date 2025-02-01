@@ -8,7 +8,7 @@ import expect from '@kbn/expect';
 import { FtrProviderContext } from '../../../ftr_provider_context';
 
 export default function ({ getPageObjects }: FtrProviderContext) {
-  const PageObjects = getPageObjects(['svlCommonPage', 'svlCommonNavigation']);
+  const PageObjects = getPageObjects(['header', 'svlCommonPage', 'svlCommonNavigation']);
 
   const allLabels = [
     { label: 'Machine Learning', expected: true },
@@ -34,21 +34,19 @@ export default function ({ getPageObjects }: FtrProviderContext) {
     { label: 'Machine Learning / Data Visualizer', expected: true },
     { label: 'Machine Learning / File Upload', expected: true },
     { label: 'Machine Learning / Index Data Visualizer', expected: true },
+    { label: 'Machine Learning / ES|QL Data Visualizer', expected: true },
     { label: 'Machine Learning / Data Drift', expected: true },
     { label: 'Alerts and Insights / Machine Learning', expected: true },
   ];
 
   describe('Search bar features', () => {
     before(async () => {
-      await PageObjects.svlCommonPage.login();
-    });
-
-    after(async () => {
-      await PageObjects.svlCommonPage.forceLogout();
+      await PageObjects.svlCommonPage.loginWithRole('developer');
     });
 
     describe('list features', () => {
       it('has the correct features enabled', async () => {
+        await PageObjects.header.waitUntilLoadingHasFinished();
         await PageObjects.svlCommonNavigation.search.showSearch();
 
         const expectedLabels = allLabels.filter((l) => l.expected).map((l) => l.label);
@@ -64,7 +62,9 @@ export default function ({ getPageObjects }: FtrProviderContext) {
         }
         await PageObjects.svlCommonNavigation.search.hideSearch();
       });
+
       it('has the correct features disabled', async () => {
+        await PageObjects.header.waitUntilLoadingHasFinished();
         await PageObjects.svlCommonNavigation.search.showSearch();
 
         const notExpectedLabels = allLabels.filter((l) => !l.expected).map((l) => l.label);

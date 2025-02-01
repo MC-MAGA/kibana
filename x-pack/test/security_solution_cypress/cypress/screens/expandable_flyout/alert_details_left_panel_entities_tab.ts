@@ -5,24 +5,31 @@
  * 2.0.
  */
 
-import {
-  ENTITIES_DETAILS_TEST_ID,
-  HOST_DETAILS_TEST_ID,
-  USER_DETAILS_TEST_ID,
-} from '@kbn/security-solution-plugin/public/flyout/document_details/left/components/test_ids';
-import { INSIGHTS_TAB_ENTITIES_BUTTON_TEST_ID } from '@kbn/security-solution-plugin/public/flyout/document_details/left/tabs/test_ids';
-import { EXPANDABLE_PANEL_CONTENT_TEST_ID } from '@kbn/security-solution-plugin/public/flyout/shared/components/test_ids';
 import { getDataTestSubjectSelector } from '../../helpers/common';
 
 export const DOCUMENT_DETAILS_FLYOUT_INSIGHTS_TAB_ENTITIES_BUTTON = getDataTestSubjectSelector(
-  INSIGHTS_TAB_ENTITIES_BUTTON_TEST_ID
+  'securitySolutionFlyoutInsightsTabEntitiesButton'
+);
+export const DOCUMENT_DETAILS_FLYOUT_INSIGHTS_TAB_USER_DETAILS_TITLE = getDataTestSubjectSelector(
+  'securitySolutionFlyoutUsersDetailsTitleText'
+);
+export const DOCUMENT_DETAILS_FLYOUT_INSIGHTS_TAB_USER_DETAILS_LINK = getDataTestSubjectSelector(
+  'securitySolutionFlyoutUsersDetailsTitleLink'
+);
+export const DOCUMENT_DETAILS_FLYOUT_INSIGHTS_TAB_USER_DETAILS_RIGHT_SECTION =
+  getDataTestSubjectSelector('securitySolutionFlyoutUsersDetailsRightSection');
+export const DOCUMENT_DETAILS_FLYOUT_INSIGHTS_TAB_USER_DETAILS = getDataTestSubjectSelector(
+  'securitySolutionFlyoutUsersDetailsContent'
 );
 
-export const DOCUMENT_DETAILS_FLYOUT_INSIGHTS_TAB_ENTITIES_CONTENT =
-  getDataTestSubjectSelector(ENTITIES_DETAILS_TEST_ID);
-export const DOCUMENT_DETAILS_FLYOUT_INSIGHTS_TAB_USER_DETAILS = getDataTestSubjectSelector(
-  EXPANDABLE_PANEL_CONTENT_TEST_ID(USER_DETAILS_TEST_ID)
+export const DOCUMENT_DETAILS_FLYOUT_INSIGHTS_TAB_HOST_DETAILS_LINK = getDataTestSubjectSelector(
+  'securitySolutionFlyoutHostsDetailsTitleLink'
 );
+export const DOCUMENT_DETAILS_FLYOUT_INSIGHTS_TAB_HOST_DETAILS_TITLE = getDataTestSubjectSelector(
+  'securitySolutionFlyoutHostsDetailsTitleText'
+);
+export const DOCUMENT_DETAILS_FLYOUT_INSIGHTS_TAB_HOST_DETAILS_RIGHT_SECTION =
+  getDataTestSubjectSelector('securitySolutionFlyoutHostsDetailsRightSection');
 export const DOCUMENT_DETAILS_FLYOUT_INSIGHTS_TAB_HOST_DETAILS = getDataTestSubjectSelector(
-  EXPANDABLE_PANEL_CONTENT_TEST_ID(HOST_DETAILS_TEST_ID)
+  'securitySolutionFlyoutHostsDetailsContent'
 );

@@ -25,7 +25,14 @@ export const INSPECT_MODAL = '[data-test-subj="modal-inspect-euiModal"]';
 export const INSPECT_QUERY =
   '[data-test-subj="events-viewer-panel"] [data-test-subj="inspect-icon-button"]';
 
-export const SERVER_SIDE_EVENT_COUNT = '[data-test-subj="server-side-event-count"]';
+export const SERVER_SIDE_EVENT_COUNT =
+  '[data-test-subj="events-viewer-panel"] [data-test-subj="server-side-event-count"]';
 
 export const EVENT_VIEWER_CHECKBOX =
   '[data-test-subj="dataGridHeaderCell-checkbox-control-column"]';
+
+export const SELECT_ALL_EVENTS_CHECKBOX = '[data-test-subj="select-all-events"]';
+
+export const EVENTS_LOADING_TRUE = '[data-test-subj="events-container-loading-true"]';
+
+export const EVENTS_LOADING_FALSE = '[data-test-subj="events-container-loading-false"]';

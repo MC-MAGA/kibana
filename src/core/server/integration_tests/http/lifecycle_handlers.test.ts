@@ -1,19 +1,24 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import supertest from 'supertest';
 import { kibanaPackageJson } from '@kbn/repo-info';
 import type { IRouter, RouteRegistrar } from '@kbn/core-http-server';
 import { contextServiceMock } from '@kbn/core-http-context-server-mocks';
-import { createConfigService, createHttpServer } from '@kbn/core-http-server-mocks';
+import { createConfigService, createHttpService } from '@kbn/core-http-server-mocks';
 import { HttpService, HttpServerSetup } from '@kbn/core-http-server-internal';
 import { executionContextServiceMock } from '@kbn/core-execution-context-server-mocks';
 import { schema } from '@kbn/config-schema';
+import { IConfigServiceMock } from '@kbn/config-mocks';
+import { Logger } from '@kbn/logging';
+import { loggerMock } from '@kbn/logging-mocks';
+import { KIBANA_BUILD_NR_HEADER } from '@kbn/core-http-common';
 
 const actualVersion = kibanaPackageJson.version;
 const versionHeader = 'kbn-version';
@@ -22,7 +27,7 @@ const nameHeader = 'kbn-name';
 const allowlistedTestPath = '/xsrf/test/route/whitelisted';
 const xsrfDisabledTestPath = '/xsrf/test/route/disabled';
 const kibanaName = 'my-kibana-name';
-const internalProductHeader = 'x-elastic-internal-origin';
+const internalOriginHeader = 'x-elastic-internal-origin';
 const internalProductQueryParam = 'elasticInternalOrigin';
 const setupDeps = {
   context: contextServiceMock.createSetupContract(),
@@ -45,6 +50,7 @@ const testConfig: Parameters<typeof createConfigService>[0] = {
       'referrer-policy': 'strict-origin', // overrides a header that is defined by securityResponseHeaders
     },
     xsrf: { disableProtection: false, allowlist: [allowlistedTestPath] },
+    restrictInternalApis: false,
   },
 };
 
@@ -52,10 +58,12 @@ describe('core lifecycle handlers', () => {
   let server: HttpService;
   let innerServer: HttpServerSetup['server'];
   let router: IRouter;
+  let logger: jest.Mocked<Logger>;
 
   beforeEach(async () => {
     const configService = createConfigService(testConfig);
-    server = createHttpServer({ configService });
+    logger = loggerMock.create();
+    server = createHttpService({ configService, logger });
     await server.preboot({ context: contextServiceMock.createPrebootContract() });
     const serverSetup = await server.setup(setupDeps);
     router = serverSetup.createRouter('/');
@@ -92,6 +100,14 @@ describe('core lifecycle handlers', () => {
         .get(testRoute)
         .set(versionHeader, 'invalid-version')
         .expect(400, /Browser client is out of date/);
+    });
+
+    it('does not log a warning message about the build mismatch', async () => {
+      await supertest(innerServer.listener)
+        .get(testRoute)
+        .set(versionHeader, 'invalid-version')
+        .expect(400, /Browser client is out of date/);
+      expect(logger.warn).not.toHaveBeenCalled();
     });
   });
 
@@ -229,7 +245,7 @@ describe('core lifecycle handlers', () => {
           restrictInternalApis: true,
         },
       });
-      server = createHttpServer({ configService });
+      server = createHttpService({ configService });
       await server.preboot({ context: contextServiceMock.createPrebootContract() });
       const serverSetup = await server.setup(setupDeps);
       router = serverSetup.createRouter('/');
@@ -264,30 +280,30 @@ describe('core lifecycle handlers', () => {
         .expect(400);
     });
 
-    it('accepts requests with the internal product header to internal routes', async () => {
+    it('accepts requests with the internal origin header to internal routes', async () => {
       await supertest(innerServer.listener)
         .get(testInternalRoute)
-        .set(internalProductHeader, 'anything')
+        .set(internalOriginHeader, 'anything')
         .query({ myValue: 'test' })
         .expect(200, 'ok()');
     });
 
-    it('accepts requests with the internal product header to public routes', async () => {
+    it('accepts requests with the internal origin header to public routes', async () => {
       await supertest(innerServer.listener)
         .get(testPublicRoute)
-        .set(internalProductHeader, 'anything')
+        .set(internalOriginHeader, 'anything')
         .query({ myValue: 'test' })
         .expect(200, 'ok()');
     });
 
-    it('accepts requests with the internal product query param to internal routes', async () => {
+    it('accepts requests with the internal origin query param to internal routes', async () => {
       await supertest(innerServer.listener)
         .get(testInternalRoute)
         .query({ [internalProductQueryParam]: 'anything', myValue: 'test' })
         .expect(200, 'ok()');
     });
 
-    it('accepts requests with the internal product query param to public routes', async () => {
+    it('accepts requests with the internal origin query param to public routes', async () => {
       await supertest(innerServer.listener)
         .get(testInternalRoute)
         .query({ [internalProductQueryParam]: 'anything', myValue: 'test' })
@@ -300,10 +316,12 @@ describe('core lifecycle handlers with restrict internal routes enforced', () =>
   let server: HttpService;
   let innerServer: HttpServerSetup['server'];
   let router: IRouter;
+  let logger: jest.Mocked<Logger>;
 
   beforeEach(async () => {
+    logger = loggerMock.create();
     const configService = createConfigService({ server: { restrictInternalApis: true } });
-    server = createHttpServer({ configService });
+    server = createHttpService({ configService, logger });
 
     await server.preboot({ context: contextServiceMock.createPrebootContract() });
     const serverSetup = await server.setup(setupDeps);
@@ -334,41 +352,53 @@ describe('core lifecycle handlers with restrict internal routes enforced', () =>
       await server.start();
     });
 
-    it('request requests without the internal product header to internal routes', async () => {
+    it('rejects requests without the internal product header to internal routes', async () => {
       const result = await supertest(innerServer.listener).get(testInternalRoute).expect(400);
       expect(result.body.error).toBe('Bad Request');
+      expect(logger.warn).toHaveBeenCalledTimes(0);
+      expect(logger.error).toHaveBeenCalledTimes(1);
     });
 
     it('accepts requests with the internal product header to internal routes', async () => {
       await supertest(innerServer.listener)
         .get(testInternalRoute)
-        .set(internalProductHeader, 'anything')
+        .set(internalOriginHeader, 'anything')
         .expect(200, 'ok()');
+      expect(logger.warn).toHaveBeenCalledTimes(0);
+      expect(logger.error).toHaveBeenCalledTimes(0);
     });
   });
 });
 
 describe('core lifecycle handlers with no strict client version check', () => {
-  const testRoute = '/version_check/test/route';
+  const testRouteGood = '/no_version_check/test/ok';
+  const testRouteBad = '/no_version_check/test/nok';
   let server: HttpService;
   let innerServer: HttpServerSetup['server'];
   let router: IRouter;
+  let configService: IConfigServiceMock;
+  let logger: jest.Mocked<Logger>;
 
   beforeEach(async () => {
-    const configService = createConfigService({
+    logger = loggerMock.create();
+    configService = createConfigService({
       server: {
         versioned: {
           strictClientVersionCheck: false,
           versionResolution: 'newest',
+          useVersionResolutionStrategyForInternalPaths: [],
         },
       },
     });
-    server = createHttpServer({ configService });
+    server = createHttpService({ configService, logger, buildNum: 1234 });
     await server.preboot({ context: contextServiceMock.createPrebootContract() });
     const serverSetup = await server.setup(setupDeps);
     router = serverSetup.createRouter('/');
-    router.get({ path: testRoute, validate: false }, (context, req, res) => {
+    router.get({ path: testRouteGood, validate: false }, (context, req, res) => {
       return res.ok({ body: 'ok' });
+    });
+    router.get({ path: testRouteBad, validate: false }, (context, req, res) => {
+      return res.custom({ body: 'nok', statusCode: 500 });
     });
     innerServer = serverSetup.server;
     await server.start();
@@ -379,13 +409,38 @@ describe('core lifecycle handlers with no strict client version check', () => {
   });
 
   it('accepts requests that do not include a version header', async () => {
-    await supertest(innerServer.listener).get(testRoute).expect(200, 'ok');
+    await supertest(innerServer.listener).get(testRouteGood).expect(200, 'ok');
   });
 
   it('accepts requests with any version passed in the version header', async () => {
     await supertest(innerServer.listener)
-      .get(testRoute)
+      .get(testRouteGood)
       .set(versionHeader, 'what-have-you')
       .expect(200, 'ok');
+  });
+
+  it('logs a warning when a client build number is newer', async () => {
+    await supertest(innerServer.listener)
+      .get(testRouteBad)
+      .set(KIBANA_BUILD_NR_HEADER, '12345')
+      .expect(500, /nok/);
+
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    const message = logger.warn.mock.calls[1][0];
+    expect(message).toMatch(
+      /^Client build \(12345\) is newer than this Kibana server build \(1234\)/
+    );
+  });
+  it('logs a warning when a client build number is older', async () => {
+    await supertest(innerServer.listener)
+      .get(testRouteBad)
+      .set(KIBANA_BUILD_NR_HEADER, '123')
+      .expect(500, /nok/);
+
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    const message = logger.warn.mock.calls[1][0];
+    expect(message).toMatch(
+      /^Client build \(123\) is older than this Kibana server build \(1234\)/
+    );
   });
 });

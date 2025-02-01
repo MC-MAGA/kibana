@@ -8,68 +8,76 @@
 import { expect } from 'expect';
 import { FtrProviderContext } from '../../../../ftr_provider_context';
 
+const ADD_TO_CASE_DATA_TEST_SUBJ = 'embeddablePanelAction-embeddable_addToExistingCase';
+
 export default ({ getPageObject, getService }: FtrProviderContext) => {
+  const common = getPageObject('common');
   const dashboard = getPageObject('dashboard');
   const lens = getPageObject('lens');
-  const svlSecNavigation = getService('svlSecNavigation');
+  const svlCommonPage = getPageObject('svlCommonPage');
   const testSubjects = getService('testSubjects');
-  const esArchiver = getService('esArchiver');
-  const kibanaServer = getService('kibanaServer');
   const cases = getService('cases');
+  const svlCases = getService('svlCases');
   const find = getService('find');
+  const retry = getService('retry');
+  const header = getPageObject('header');
+  const toasts = getService('toasts');
+  const dashboardPanelActions = getService('dashboardPanelActions');
 
-  // Failing
-  // Issue: https://github.com/elastic/kibana/issues/165135
-  describe.skip('Cases persistable attachments', () => {
-    describe('lens visualization', () => {
+  describe('Cases persistable attachments', () => {
+    // FLAKY: https://github.com/elastic/kibana/issues/176874
+    describe.skip('lens visualization', () => {
       before(async () => {
-        await esArchiver.loadIfNeeded('x-pack/test/functional/es_archives/logstash_functional');
-        await kibanaServer.importExport.load(
-          'x-pack/test/functional/fixtures/kbn_archiver/dashboard/feature_controls/security/security.json'
-        );
+        await svlCommonPage.loginAsAdmin();
+        await common.navigateToApp('security', { path: 'dashboards' });
+        await header.waitUntilLoadingHasFinished();
 
-        await svlSecNavigation.navigateToLandingPage();
-
-        await testSubjects.click('solutionSideNavItemLink-dashboards');
+        await retry.waitFor('createDashboardButton', async () => {
+          return await testSubjects.exists('createDashboardButton');
+        });
 
         await testSubjects.click('createDashboardButton');
+        await header.waitUntilLoadingHasFinished();
 
         await lens.createAndAddLensFromDashboard({});
-
         await dashboard.waitForRenderComplete();
       });
 
       after(async () => {
-        await cases.api.deleteAllCases();
-
-        await esArchiver.unload('x-pack/test/functional/es_archives/logstash_functional');
-        await kibanaServer.importExport.unload(
-          'x-pack/test/functional/fixtures/kbn_archiver/lens/lens_basic.json'
-        );
+        await svlCases.api.deleteAllCaseItems();
       });
 
       it('adds lens visualization to a new case', async () => {
         const caseTitle =
           'case created in security solution from my dashboard with lens visualization';
 
-        await testSubjects.click('embeddablePanelToggleMenuIcon');
-        await testSubjects.click('embeddablePanelMore-mainMenu');
-        await testSubjects.click('embeddablePanelAction-embeddable_addToNewCase');
+        await dashboardPanelActions.clickPanelAction(ADD_TO_CASE_DATA_TEST_SUBJ);
 
-        await testSubjects.existOrFail('create-case-flyout');
+        await retry.waitFor('wait for the modal to open', async () => {
+          return (
+            (await testSubjects.exists('all-cases-modal')) &&
+            (await testSubjects.exists('cases-table-add-case-filter-bar'))
+          );
+        });
+
+        await retry.waitFor('wait for the flyout to open', async () => {
+          if (await testSubjects.exists('cases-table-add-case-filter-bar')) {
+            await testSubjects.click('cases-table-add-case-filter-bar');
+          }
+
+          return testSubjects.exists('create-case-flyout');
+        });
 
         await testSubjects.setValue('input', caseTitle);
-
         await testSubjects.setValue('euiMarkdownEditorTextArea', 'test description');
 
         // verify that solution picker is not visible
         await testSubjects.missingOrFail('caseOwnerSelector');
-
         await testSubjects.click('create-case-submit');
 
         await cases.common.expectToasterToContain(`${caseTitle} has been updated`);
-
         await testSubjects.click('toaster-content-case-view-link');
+        await toasts.dismissAllWithChecks();
 
         if (await testSubjects.exists('appLeaveConfirmModal')) {
           await testSubjects.exists('confirmModalConfirmButton');
@@ -79,7 +87,9 @@ export default ({ getPageObject, getService }: FtrProviderContext) => {
         const title = await find.byCssSelector('[data-test-subj="editable-title-header-value"]');
         expect(await title.getVisibleText()).toEqual(caseTitle);
 
-        await testSubjects.existOrFail('comment-persistableState-.lens');
+        await retry.waitFor('wait for the visualization to exist', async () => {
+          return testSubjects.exists('comment-persistableState-.lens');
+        });
       });
 
       it('adds lens visualization to an existing case from dashboard', async () => {
@@ -90,23 +100,24 @@ export default ({ getPageObject, getService }: FtrProviderContext) => {
           owner: 'securitySolution',
         });
 
-        await testSubjects.click('solutionSideNavItemLink-dashboards');
+        await common.navigateToApp('security', { path: 'dashboards' });
+        await header.waitUntilLoadingHasFinished();
+        await testSubjects.click('LandingImageCards-accordionButton');
 
         if (await testSubjects.exists('edit-unsaved-New-Dashboard')) {
           await testSubjects.click('edit-unsaved-New-Dashboard');
         }
 
-        await testSubjects.click('embeddablePanelToggleMenuIcon');
-        await testSubjects.click('embeddablePanelMore-mainMenu');
-        await testSubjects.click('embeddablePanelAction-embeddable_addToExistingCase');
+        await dashboardPanelActions.clickPanelAction(ADD_TO_CASE_DATA_TEST_SUBJ);
 
         // verify that solution filter is not visible
-        await testSubjects.missingOrFail('solution-filter-popover-button');
+        await testSubjects.missingOrFail('options-filter-popover-button-owner');
 
         await testSubjects.click(`cases-table-row-select-${theCase.id}`);
 
         await cases.common.expectToasterToContain(`${theCaseTitle} has been updated`);
         await testSubjects.click('toaster-content-case-view-link');
+        await toasts.dismissAllWithChecks();
 
         if (await testSubjects.exists('appLeaveConfirmModal')) {
           await testSubjects.exists('confirmModalConfirmButton');

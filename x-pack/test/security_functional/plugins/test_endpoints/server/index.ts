@@ -5,24 +5,28 @@
  * 2.0.
  */
 
-import { PluginInitializer, Plugin, CoreSetup } from '@kbn/core/server';
-import {
+import type { CoreSetup, Plugin, PluginInitializer } from '@kbn/core/server';
+import type { SecurityPluginSetup, SecurityPluginStart } from '@kbn/security-plugin/server';
+import type {
   TaskManagerSetupContract,
   TaskManagerStartContract,
 } from '@kbn/task-manager-plugin/server';
+
 import { initRoutes } from './init_routes';
 
 export interface PluginSetupDependencies {
+  security: SecurityPluginSetup;
   taskManager: TaskManagerSetupContract;
 }
 
 export interface PluginStartDependencies {
+  security: SecurityPluginStart;
   taskManager: TaskManagerStartContract;
 }
 
-export const plugin: PluginInitializer<void, void> = (
+export const plugin: PluginInitializer<void, void> = async (
   initializerContext
-): Plugin<void, void, PluginSetupDependencies, PluginStartDependencies> => ({
+): Promise<Plugin<void, void, PluginSetupDependencies, PluginStartDependencies>> => ({
   setup: (core: CoreSetup<PluginStartDependencies>) => initRoutes(initializerContext, core),
   start: () => {},
   stop: () => {},

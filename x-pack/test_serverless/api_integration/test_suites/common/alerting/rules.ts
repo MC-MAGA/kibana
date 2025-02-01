@@ -5,53 +5,42 @@
  * 2.0.
  */
 
+import { RULE_SAVED_OBJECT_TYPE } from '@kbn/alerting-plugin/server';
 import expect from '@kbn/expect';
+import { omit } from 'lodash';
 import { FtrProviderContext } from '../../../ftr_provider_context';
-import {
-  createIndexConnector,
-  createEsQueryRule,
-  disableRule,
-  updateEsQueryRule,
-  runRule,
-  muteRule,
-  enableRule,
-  muteAlert,
-  unmuteRule,
-  createSlackConnector,
-} from './helpers/alerting_api_helper';
-import {
-  createIndex,
-  getDocumentsInIndex,
-  waitForAllTasks,
-  waitForAllTasksIdle,
-  waitForDisabled,
-  waitForDocumentInIndex,
-  waitForExecutionEventLog,
-  waitForNumRuleRuns,
-} from './helpers/alerting_wait_for_helpers';
+import type { InternalRequestHeader, RoleCredentials } from '../../../../shared/services';
 
 export default function ({ getService }: FtrProviderContext) {
   const supertest = getService('supertest');
   const esClient = getService('es');
   const esDeleteAllIndices = getService('esDeleteAllIndices');
+  const svlCommonApi = getService('svlCommonApi');
+  const svlUserManager = getService('svlUserManager');
+  const alertingApi = getService('alertingApi');
+
+  let roleAdmin: RoleCredentials;
+  let internalReqHeader: InternalRequestHeader;
 
   describe('Alerting rules', function () {
     // Timeout of 360000ms exceeded
     this.tags(['failsOnMKI']);
     const RULE_TYPE_ID = '.es-query';
     const ALERT_ACTION_INDEX = 'alert-action-es-query';
-    let actionId: string;
+    let connectorId: string;
     let ruleId: string;
 
+    before(async () => {
+      roleAdmin = await svlUserManager.createM2mApiKeyWithRoleScope('admin');
+      internalReqHeader = svlCommonApi.getInternalRequestHeader();
+    });
+    after(async () => {
+      await svlUserManager.invalidateM2mApiKeyWithRoleScope(roleAdmin);
+    });
+
     afterEach(async () => {
-      await supertest
-        .delete(`/api/actions/connector/${actionId}`)
-        .set('kbn-xsrf', 'foo')
-        .set('x-elastic-internal-origin', 'foo');
-      await supertest
-        .delete(`/api/alerting/rule/${ruleId}`)
-        .set('kbn-xsrf', 'foo')
-        .set('x-elastic-internal-origin', 'foo');
+      await supertest.delete(`/api/actions/connector/${connectorId}`).set(internalReqHeader);
+      await supertest.delete(`/api/alerting/rule/${ruleId}`).set(internalReqHeader);
       await esClient.deleteByQuery({
         index: '.kibana-event-log-*',
         conflicts: 'proceed',
@@ -63,15 +52,15 @@ export default function ({ getService }: FtrProviderContext) {
     it('should schedule task, run rule and schedule actions when appropriate', async () => {
       const testStart = new Date();
 
-      const createdAction = await createIndexConnector({
-        supertest,
+      const createdConnector = await alertingApi.helpers.createIndexConnector({
+        roleAuthc: roleAdmin,
         name: 'Index Connector: Alerting API test',
         indexName: ALERT_ACTION_INDEX,
       });
-      actionId = createdAction.id;
+      connectorId = createdConnector.id;
 
-      const createdRule = await createEsQueryRule({
-        supertest,
+      const createdRule = await alertingApi.helpers.createEsQueryRule({
+        roleAuthc: roleAdmin,
         consumer: 'alerts',
         name: 'always fire',
         ruleTypeId: RULE_TYPE_ID,
@@ -88,7 +77,7 @@ export default function ({ getService }: FtrProviderContext) {
         actions: [
           {
             group: 'query matched',
-            id: actionId,
+            id: connectorId,
             params: {
               documents: [
                 {
@@ -101,6 +90,7 @@ export default function ({ getService }: FtrProviderContext) {
                   alertActionGroup: '{{alert.actionGroup}}',
                   instanceContextValue: '{{context.instanceContextValue}}',
                   instanceStateValue: '{{state.instanceStateValue}}',
+                  date: '{{date}}',
                 },
               ],
             },
@@ -115,14 +105,19 @@ export default function ({ getService }: FtrProviderContext) {
       ruleId = createdRule.id;
 
       // Wait for the action to index a document before disabling the alert and waiting for tasks to finish
-      const resp = await waitForDocumentInIndex({
+      const resp = await alertingApi.helpers.waitForDocumentInIndex({
         esClient,
         indexName: ALERT_ACTION_INDEX,
+        ruleId,
+        retryOptions: {
+          retryCount: 12,
+          retryDelay: 2000,
+        },
       });
       expect(resp.hits.hits.length).to.be(1);
 
       const document = resp.hits.hits[0];
-      expect(document._source).to.eql({
+      expect(omit(document, '_source.date')._source).to.eql({
         alertActionGroup: 'query matched',
         alertId: 'query matched',
         instanceContextValue: '',
@@ -135,7 +130,7 @@ export default function ({ getService }: FtrProviderContext) {
         tags: '',
       });
 
-      const eventLogResp = await waitForExecutionEventLog({
+      const eventLogResp = await alertingApi.helpers.waiting.waitForExecutionEventLog({
         esClient,
         filter: testStart,
         ruleId,
@@ -155,15 +150,15 @@ export default function ({ getService }: FtrProviderContext) {
     it('should pass updated rule params to executor', async () => {
       const testStart = new Date();
 
-      const createdAction = await createIndexConnector({
-        supertest,
+      const createdConnector = await alertingApi.helpers.createIndexConnector({
+        roleAuthc: roleAdmin,
         name: 'Index Connector: Alerting API test',
         indexName: ALERT_ACTION_INDEX,
       });
-      actionId = createdAction.id;
+      connectorId = createdConnector.id;
 
-      const createdRule = await createEsQueryRule({
-        supertest,
+      const createdRule = await alertingApi.helpers.createEsQueryRule({
+        roleAuthc: roleAdmin,
         consumer: 'alerts',
         name: 'always fire',
         ruleTypeId: RULE_TYPE_ID,
@@ -180,7 +175,7 @@ export default function ({ getService }: FtrProviderContext) {
         actions: [
           {
             group: 'query matched',
-            id: actionId,
+            id: connectorId,
             params: {
               documents: [
                 {
@@ -193,6 +188,7 @@ export default function ({ getService }: FtrProviderContext) {
                   alertActionGroup: '{{alert.actionGroup}}',
                   instanceContextValue: '{{context.instanceContextValue}}',
                   instanceStateValue: '{{state.instanceStateValue}}',
+                  date: '{{date}}',
                 },
               ],
             },
@@ -207,14 +203,16 @@ export default function ({ getService }: FtrProviderContext) {
       ruleId = createdRule.id;
 
       // Wait for the action to index a document before disabling the alert and waiting for tasks to finish
-      const resp = await waitForDocumentInIndex({
+      const resp = await alertingApi.helpers.waitForDocumentInIndex({
         esClient,
         indexName: ALERT_ACTION_INDEX,
+        ruleId,
+        retryOptions: { retryDelay: 800, retryCount: 10 },
       });
       expect(resp.hits.hits.length).to.be(1);
 
       const document = resp.hits.hits[0];
-      expect(document._source).to.eql({
+      expect(omit(document, '_source.date')._source).to.eql({
         alertActionGroup: 'query matched',
         alertId: 'query matched',
         instanceContextValue: '',
@@ -227,13 +225,13 @@ export default function ({ getService }: FtrProviderContext) {
         tags: '',
       });
 
-      await waitForAllTasksIdle({
+      await alertingApi.helpers.waiting.waitForAllTasksIdle({
         esClient,
         filter: testStart,
       });
 
-      await updateEsQueryRule({
-        supertest,
+      await alertingApi.helpers.updateEsQueryRule({
+        roleAuthc: roleAdmin,
         ruleId,
         updates: {
           name: 'def',
@@ -241,21 +239,22 @@ export default function ({ getService }: FtrProviderContext) {
         },
       });
 
-      await runRule({
-        supertest,
+      await alertingApi.helpers.runRule({
+        roleAuthc: roleAdmin,
         ruleId,
       });
 
       // make sure alert info passed to executor is correct
-      const resp2 = await waitForDocumentInIndex({
+      const resp2 = await alertingApi.helpers.waitForDocumentInIndex({
         esClient,
         indexName: ALERT_ACTION_INDEX,
+        ruleId,
         num: 2,
       });
       expect(resp2.hits.hits.length).to.be(2);
 
-      const document2 = resp2.hits.hits[1];
-      expect(document2._source).to.eql({
+      const document2 = resp2.hits.hits[0];
+      expect(omit(document2, '_source.date')._source).to.eql({
         alertActionGroup: 'query matched',
         alertId: 'query matched',
         instanceContextValue: '',
@@ -273,14 +272,14 @@ export default function ({ getService }: FtrProviderContext) {
       const testStart = new Date();
 
       // Should fail
-      const createdAction = await createSlackConnector({
-        supertest,
+      const createdConnector = await alertingApi.helpers.createSlackConnector({
+        roleAuthc: roleAdmin,
         name: 'Slack Connector: Alerting API test',
       });
-      actionId = createdAction.id;
+      connectorId = createdConnector.id;
 
-      const createdRule = await createEsQueryRule({
-        supertest,
+      const createdRule = await alertingApi.helpers.createEsQueryRule({
+        roleAuthc: roleAdmin,
         consumer: 'alerts',
         name: 'always fire',
         ruleTypeId: RULE_TYPE_ID,
@@ -297,7 +296,7 @@ export default function ({ getService }: FtrProviderContext) {
         actions: [
           {
             group: 'query matched',
-            id: actionId,
+            id: connectorId,
             params: {
               message: `message: {{rule.id}}`,
             },
@@ -312,7 +311,7 @@ export default function ({ getService }: FtrProviderContext) {
       ruleId = createdRule.id;
 
       // Should retry when the the action fails
-      const resp = await waitForAllTasks({
+      const resp = await alertingApi.helpers.waiting.waitForAllTasks({
         esClient,
         filter: testStart,
         taskType: 'actions:.slack',
@@ -324,15 +323,15 @@ export default function ({ getService }: FtrProviderContext) {
     it('should throttle alerts when appropriate', async () => {
       const testStart = new Date();
 
-      const createdAction = await createIndexConnector({
-        supertest,
+      const createdConnector = await alertingApi.helpers.createIndexConnector({
+        roleAuthc: roleAdmin,
         name: 'Index Connector: Alerting API test',
         indexName: ALERT_ACTION_INDEX,
       });
-      actionId = createdAction.id;
+      connectorId = createdConnector.id;
 
-      const createdRule = await createEsQueryRule({
-        supertest,
+      const createdRule = await alertingApi.helpers.createEsQueryRule({
+        roleAuthc: roleAdmin,
         consumer: 'alerts',
         name: 'always fire',
         ruleTypeId: RULE_TYPE_ID,
@@ -351,7 +350,7 @@ export default function ({ getService }: FtrProviderContext) {
         actions: [
           {
             group: 'query matched',
-            id: actionId,
+            id: connectorId,
             params: {
               documents: [
                 {
@@ -364,6 +363,7 @@ export default function ({ getService }: FtrProviderContext) {
                   alertActionGroup: '{{alert.actionGroup}}',
                   instanceContextValue: '{{context.instanceContextValue}}',
                   instanceStateValue: '{{state.instanceStateValue}}',
+                  date: '{{date}}',
                 },
               ],
             },
@@ -373,23 +373,30 @@ export default function ({ getService }: FtrProviderContext) {
       ruleId = createdRule.id;
 
       // Wait until alerts ran at least 3 times before disabling the alert and waiting for tasks to finish
-      await waitForNumRuleRuns({ supertest, numOfRuns: 3, ruleId, esClient, testStart });
+      await alertingApi.helpers.waitForNumRuleRuns({
+        roleAuthc: roleAdmin,
+        numOfRuns: 3,
+        ruleId,
+        esClient,
+        testStart,
+      });
 
-      await disableRule({
-        supertest,
+      await alertingApi.helpers.disableRule({
+        roleAuthc: roleAdmin,
         ruleId,
       });
 
-      await waitForDisabled({
+      await alertingApi.helpers.waiting.waitForDisabled({
         esClient,
         ruleId,
         filter: testStart,
       });
 
       // Ensure actions only executed once
-      const resp = await waitForDocumentInIndex({
+      const resp = await alertingApi.helpers.waitForDocumentInIndex({
         esClient,
         indexName: ALERT_ACTION_INDEX,
+        ruleId,
       });
       expect(resp.hits.hits.length).to.be(1);
     });
@@ -397,15 +404,15 @@ export default function ({ getService }: FtrProviderContext) {
     it('should throttle alerts with throttled action when appropriate', async () => {
       const testStart = new Date();
 
-      const createdAction = await createIndexConnector({
-        supertest,
+      const createdConnector = await alertingApi.helpers.createIndexConnector({
+        roleAuthc: roleAdmin,
         name: 'Index Connector: Alerting API test',
         indexName: ALERT_ACTION_INDEX,
       });
-      actionId = createdAction.id;
+      connectorId = createdConnector.id;
 
-      const createdRule = await createEsQueryRule({
-        supertest,
+      const createdRule = await alertingApi.helpers.createEsQueryRule({
+        roleAuthc: roleAdmin,
         consumer: 'alerts',
         name: 'always fire',
         ruleTypeId: RULE_TYPE_ID,
@@ -423,7 +430,7 @@ export default function ({ getService }: FtrProviderContext) {
         actions: [
           {
             group: 'query matched',
-            id: actionId,
+            id: connectorId,
             params: {
               documents: [
                 {
@@ -436,6 +443,7 @@ export default function ({ getService }: FtrProviderContext) {
                   alertActionGroup: '{{alert.actionGroup}}',
                   instanceContextValue: '{{context.instanceContextValue}}',
                   instanceStateValue: '{{state.instanceStateValue}}',
+                  date: '{{date}}',
                 },
               ],
             },
@@ -450,23 +458,30 @@ export default function ({ getService }: FtrProviderContext) {
       ruleId = createdRule.id;
 
       // Wait until alerts ran at least 3 times before disabling the alert and waiting for tasks to finish
-      await waitForNumRuleRuns({ supertest, numOfRuns: 3, ruleId, esClient, testStart });
+      await alertingApi.helpers.waitForNumRuleRuns({
+        roleAuthc: roleAdmin,
+        numOfRuns: 3,
+        ruleId,
+        esClient,
+        testStart,
+      });
 
-      await disableRule({
-        supertest,
+      await alertingApi.helpers.disableRule({
+        roleAuthc: roleAdmin,
         ruleId,
       });
 
-      await waitForDisabled({
+      await alertingApi.helpers.waiting.waitForDisabled({
         esClient,
         ruleId,
         filter: testStart,
       });
 
       // Ensure actions only executed once
-      const resp = await waitForDocumentInIndex({
+      const resp = await alertingApi.helpers.waitForDocumentInIndex({
         esClient,
         indexName: ALERT_ACTION_INDEX,
+        ruleId,
       });
       expect(resp.hits.hits.length).to.be(1);
     });
@@ -474,15 +489,15 @@ export default function ({ getService }: FtrProviderContext) {
     it('should reset throttle window when not firing and should not throttle when changing groups', async () => {
       const testStart = new Date();
 
-      const createdAction = await createIndexConnector({
-        supertest,
+      const createdConnector = await alertingApi.helpers.createIndexConnector({
+        roleAuthc: roleAdmin,
         name: 'Index Connector: Alerting API test',
         indexName: ALERT_ACTION_INDEX,
       });
-      actionId = createdAction.id;
+      connectorId = createdConnector.id;
 
-      const createdRule = await createEsQueryRule({
-        supertest,
+      const createdRule = await alertingApi.helpers.createEsQueryRule({
+        roleAuthc: roleAdmin,
         consumer: 'alerts',
         name: 'always fire',
         ruleTypeId: RULE_TYPE_ID,
@@ -500,7 +515,7 @@ export default function ({ getService }: FtrProviderContext) {
         actions: [
           {
             group: 'query matched',
-            id: actionId,
+            id: connectorId,
             params: {
               documents: [
                 {
@@ -513,6 +528,7 @@ export default function ({ getService }: FtrProviderContext) {
                   alertActionGroup: '{{alert.actionGroup}}',
                   instanceContextValue: '{{context.instanceContextValue}}',
                   instanceStateValue: '{{state.instanceStateValue}}',
+                  date: '{{date}}',
                 },
               ],
             },
@@ -524,7 +540,7 @@ export default function ({ getService }: FtrProviderContext) {
           },
           {
             group: 'recovered',
-            id: actionId,
+            id: connectorId,
             params: {
               documents: [
                 {
@@ -537,6 +553,7 @@ export default function ({ getService }: FtrProviderContext) {
                   alertActionGroup: '{{alert.actionGroup}}',
                   instanceContextValue: '{{context.instanceContextValue}}',
                   instanceStateValue: '{{state.instanceStateValue}}',
+                  date: '{{date}}',
                 },
               ],
             },
@@ -551,20 +568,21 @@ export default function ({ getService }: FtrProviderContext) {
       ruleId = createdRule.id;
 
       // Wait for the action to index a document
-      const resp = await waitForDocumentInIndex({
+      const resp = await alertingApi.helpers.waiting.waitForDocumentInIndex({
         esClient,
         indexName: ALERT_ACTION_INDEX,
+        ruleId,
       });
       expect(resp.hits.hits.length).to.be(1);
 
-      await waitForAllTasksIdle({
+      await alertingApi.helpers.waiting.waitForAllTasksIdle({
         esClient,
         filter: testStart,
       });
 
       // Update the rule to recover
-      await updateEsQueryRule({
-        supertest,
+      await alertingApi.helpers.updateEsQueryRule({
+        roleAuthc: roleAdmin,
         ruleId,
         updates: {
           name: 'never fire',
@@ -581,34 +599,39 @@ export default function ({ getService }: FtrProviderContext) {
         },
       });
 
-      await runRule({
-        supertest,
+      await alertingApi.helpers.runRule({
+        roleAuthc: roleAdmin,
         ruleId,
       });
 
-      const eventLogResp = await waitForExecutionEventLog({
+      const eventLogResp = await alertingApi.helpers.waiting.waitForExecutionEventLog({
         esClient,
         filter: testStart,
         ruleId,
         num: 2,
+        retryOptions: {
+          retryCount: 12,
+          retryDelay: 2000,
+        },
       });
       expect(eventLogResp.hits.hits.length).to.be(2);
 
-      await disableRule({
-        supertest,
+      await alertingApi.helpers.disableRule({
+        roleAuthc: roleAdmin,
         ruleId,
       });
 
-      await waitForDisabled({
+      await alertingApi.helpers.waiting.waitForDisabled({
         esClient,
         ruleId,
         filter: testStart,
       });
 
       // Ensure only 2 actions are executed
-      const resp2 = await waitForDocumentInIndex({
+      const resp2 = await alertingApi.helpers.waitForDocumentInIndex({
         esClient,
         indexName: ALERT_ACTION_INDEX,
+        ruleId,
         num: 2,
       });
       expect(resp2.hits.hits.length).to.be(2);
@@ -616,17 +639,17 @@ export default function ({ getService }: FtrProviderContext) {
 
     it(`shouldn't schedule actions when alert is muted`, async () => {
       const testStart = new Date();
-      await createIndex({ esClient, indexName: ALERT_ACTION_INDEX });
+      await alertingApi.helpers.waiting.createIndex({ esClient, indexName: ALERT_ACTION_INDEX });
 
-      const createdAction = await createIndexConnector({
-        supertest,
+      const createdConnector = await alertingApi.helpers.createIndexConnector({
+        roleAuthc: roleAdmin,
         name: 'Index Connector: Alerting API test',
         indexName: ALERT_ACTION_INDEX,
       });
-      actionId = createdAction.id;
+      connectorId = createdConnector.id;
 
-      const createdRule = await createEsQueryRule({
-        supertest,
+      const createdRule = await alertingApi.helpers.createEsQueryRule({
+        roleAuthc: roleAdmin,
         enabled: false,
         consumer: 'alerts',
         name: 'always fire',
@@ -644,7 +667,7 @@ export default function ({ getService }: FtrProviderContext) {
         actions: [
           {
             group: 'query matched',
-            id: actionId,
+            id: connectorId,
             params: {
               documents: [
                 {
@@ -657,6 +680,7 @@ export default function ({ getService }: FtrProviderContext) {
                   alertActionGroup: '{{alert.actionGroup}}',
                   instanceContextValue: '{{context.instanceContextValue}}',
                   instanceStateValue: '{{state.instanceStateValue}}',
+                  date: '{{date}}',
                 },
               ],
             },
@@ -670,52 +694,59 @@ export default function ({ getService }: FtrProviderContext) {
       });
       ruleId = createdRule.id;
 
-      await muteRule({
-        supertest,
+      await alertingApi.helpers.muteRule({
+        roleAuthc: roleAdmin,
         ruleId,
       });
 
-      await enableRule({
-        supertest,
+      await alertingApi.helpers.enableRule({
+        roleAuthc: roleAdmin,
         ruleId,
       });
 
       // Wait until alerts schedule actions twice to ensure actions had a chance to skip
       // execution once before disabling the alert and waiting for tasks to finish
-      await waitForNumRuleRuns({ supertest, numOfRuns: 2, ruleId, esClient, testStart });
+      await alertingApi.helpers.waitForNumRuleRuns({
+        roleAuthc: roleAdmin,
+        numOfRuns: 2,
+        ruleId,
+        esClient,
+        testStart,
+      });
 
-      await disableRule({
-        supertest,
+      await alertingApi.helpers.disableRule({
+        roleAuthc: roleAdmin,
         ruleId,
       });
 
-      await waitForDisabled({
+      await alertingApi.helpers.waiting.waitForDisabled({
         esClient,
         ruleId,
         filter: testStart,
       });
 
       // Should not have executed any action
-      const resp2 = await getDocumentsInIndex({
+      const resp2 = await alertingApi.helpers.waiting.getDocumentsInIndex({
         esClient,
         indexName: ALERT_ACTION_INDEX,
+        ruleId,
       });
       expect(resp2.hits.hits.length).to.be(0);
     });
 
     it(`shouldn't schedule actions when alert instance is muted`, async () => {
       const testStart = new Date();
-      await createIndex({ esClient, indexName: ALERT_ACTION_INDEX });
+      await alertingApi.helpers.waiting.createIndex({ esClient, indexName: ALERT_ACTION_INDEX });
 
-      const createdAction = await createIndexConnector({
-        supertest,
+      const createdConnector = await alertingApi.helpers.createIndexConnector({
+        roleAuthc: roleAdmin,
         name: 'Index Connector: Alerting API test',
         indexName: ALERT_ACTION_INDEX,
       });
-      actionId = createdAction.id;
+      connectorId = createdConnector.id;
 
-      const createdRule = await createEsQueryRule({
-        supertest,
+      const createdRule = await alertingApi.helpers.createEsQueryRule({
+        roleAuthc: roleAdmin,
         enabled: false,
         consumer: 'alerts',
         name: 'always fire',
@@ -733,7 +764,7 @@ export default function ({ getService }: FtrProviderContext) {
         actions: [
           {
             group: 'query matched',
-            id: actionId,
+            id: connectorId,
             params: {
               documents: [
                 {
@@ -746,6 +777,7 @@ export default function ({ getService }: FtrProviderContext) {
                   alertActionGroup: '{{alert.actionGroup}}',
                   instanceContextValue: '{{context.instanceContextValue}}',
                   instanceStateValue: '{{state.instanceStateValue}}',
+                  date: '{{date}}',
                 },
               ],
             },
@@ -759,50 +791,57 @@ export default function ({ getService }: FtrProviderContext) {
       });
       ruleId = createdRule.id;
 
-      await muteAlert({
-        supertest,
+      await alertingApi.helpers.muteAlert({
+        roleAuthc: roleAdmin,
         ruleId,
         alertId: 'query matched',
       });
 
-      await enableRule({
-        supertest,
+      await alertingApi.helpers.enableRule({
+        roleAuthc: roleAdmin,
         ruleId,
       });
 
       // Wait until alerts schedule actions twice to ensure actions had a chance to skip
       // execution once before disabling the alert and waiting for tasks to finish
-      await waitForNumRuleRuns({ supertest, numOfRuns: 2, ruleId, esClient, testStart });
+      await alertingApi.helpers.waitForNumRuleRuns({
+        roleAuthc: roleAdmin,
+        numOfRuns: 2,
+        ruleId,
+        esClient,
+        testStart,
+      });
 
-      await disableRule({
-        supertest,
+      await alertingApi.helpers.disableRule({
+        roleAuthc: roleAdmin,
         ruleId,
       });
 
-      await waitForDisabled({
+      await alertingApi.helpers.waiting.waitForDisabled({
         esClient,
         ruleId,
         filter: testStart,
       });
 
       // Should not have executed any action
-      const resp2 = await getDocumentsInIndex({
+      const resp2 = await alertingApi.helpers.waiting.getDocumentsInIndex({
         esClient,
         indexName: ALERT_ACTION_INDEX,
+        ruleId,
       });
       expect(resp2.hits.hits.length).to.be(0);
     });
 
     it(`should unmute all instances when unmuting an alert`, async () => {
-      const createdAction = await createIndexConnector({
-        supertest,
+      const createdConnector = await alertingApi.helpers.createIndexConnector({
+        roleAuthc: roleAdmin,
         name: 'Index Connector: Alerting API test',
         indexName: ALERT_ACTION_INDEX,
       });
-      actionId = createdAction.id;
+      connectorId = createdConnector.id;
 
-      const createdRule = await createEsQueryRule({
-        supertest,
+      const createdRule = await alertingApi.helpers.createEsQueryRule({
+        roleAuthc: roleAdmin,
         enabled: false,
         consumer: 'alerts',
         name: 'always fire',
@@ -820,7 +859,7 @@ export default function ({ getService }: FtrProviderContext) {
         actions: [
           {
             group: 'query matched',
-            id: actionId,
+            id: connectorId,
             params: {
               documents: [
                 {
@@ -833,6 +872,7 @@ export default function ({ getService }: FtrProviderContext) {
                   alertActionGroup: '{{alert.actionGroup}}',
                   instanceContextValue: '{{context.instanceContextValue}}',
                   instanceStateValue: '{{state.instanceStateValue}}',
+                  date: '{{date}}',
                 },
               ],
             },
@@ -846,31 +886,32 @@ export default function ({ getService }: FtrProviderContext) {
       });
       ruleId = createdRule.id;
 
-      await muteAlert({
-        supertest,
+      await alertingApi.helpers.muteAlert({
+        roleAuthc: roleAdmin,
         ruleId,
         alertId: 'query matched',
       });
 
-      await muteRule({
-        supertest,
+      await alertingApi.helpers.muteRule({
+        roleAuthc: roleAdmin,
         ruleId,
       });
 
-      await unmuteRule({
-        supertest,
+      await alertingApi.helpers.unmuteRule({
+        roleAuthc: roleAdmin,
         ruleId,
       });
 
-      await enableRule({
-        supertest,
+      await alertingApi.helpers.enableRule({
+        roleAuthc: roleAdmin,
         ruleId,
       });
 
       // Should have one document indexed by the action
-      const resp = await waitForDocumentInIndex({
+      const resp = await alertingApi.helpers.waitForDocumentInIndex({
         esClient,
         indexName: ALERT_ACTION_INDEX,
+        ruleId,
       });
       expect(resp.hits.hits.length).to.be(1);
     });
@@ -906,7 +947,7 @@ function validateEventLog(event: any, params: ValidateEventLogParams) {
   expect(event?.kibana?.saved_objects).to.eql([
     {
       rel: 'primary',
-      type: 'alert',
+      type: RULE_SAVED_OBJECT_TYPE,
       id: params.ruleId,
       type_id: params.ruleTypeId,
     },
@@ -952,7 +993,7 @@ function validateEventLog(event: any, params: ValidateEventLogParams) {
     id: params.ruleId,
     license: 'basic',
     category: params.ruleTypeId,
-    ruleset: 'stackAlerts',
+    ruleset: event?.rule.ruleset,
     name: params.name,
   });
 

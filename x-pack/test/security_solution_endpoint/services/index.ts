@@ -5,6 +5,8 @@
  * 2.0.
  */
 
+import { commonFunctionalServices } from '@kbn/ftr-common-functional-services';
+import { SvlCommonApiServiceProvider } from '@kbn/test-suites-serverless/shared/services/svl_common_api';
 import { services as xPackFunctionalServices } from '../../functional/services';
 import { IngestManagerProvider } from '../../common/services/ingest_manager';
 import { EndpointTelemetryTestResourcesProvider } from './endpoint_telemetry';
@@ -13,9 +15,16 @@ import { TimelineTestService } from '../../security_solution_ftr/services/timeli
 import { DetectionsTestService } from '../../security_solution_ftr/services/detections';
 import { EndpointPolicyTestResourcesProvider } from './endpoint_policy';
 import { EndpointArtifactsTestResources } from './endpoint_artifacts';
+import {
+  KibanaSupertestWithCertProvider,
+  KibanaSupertestWithCertWithoutAuthProvider,
+} from './supertest_with_cert';
+import { SecuritySolutionEndpointDataStreamHelpers } from '../../common/services/security_solution/endpoint_data_stream_helpers';
+import { SecuritySolutionEndpointRegistryHelpers } from '../../common/services/security_solution/endpoint_registry_helpers';
 
 export const services = {
   ...xPackFunctionalServices,
+
   endpointTestResources: EndpointTestResources,
   telemetryTestResources: EndpointTelemetryTestResourcesProvider,
   ingestManager: IngestManagerProvider,
@@ -23,4 +32,18 @@ export const services = {
   detections: DetectionsTestService,
   endpointArtifactTestResources: EndpointArtifactsTestResources,
   policyTestResources: EndpointPolicyTestResourcesProvider,
+  endpointDataStreamHelpers: SecuritySolutionEndpointDataStreamHelpers,
+  endpointRegistryHelpers: SecuritySolutionEndpointRegistryHelpers,
 };
+
+export const svlServices = {
+  ...services,
+
+  supertest: KibanaSupertestWithCertProvider,
+  supertestWithoutAuth: KibanaSupertestWithCertWithoutAuthProvider,
+
+  svlCommonApi: SvlCommonApiServiceProvider,
+  svlUserManager: commonFunctionalServices.samlAuth,
+};
+
+export type Services = typeof services | typeof svlServices;

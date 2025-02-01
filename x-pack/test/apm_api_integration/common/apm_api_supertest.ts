@@ -15,11 +15,12 @@ import type {
 import type { APIEndpoint } from '@kbn/apm-plugin/server';
 import { formatRequest } from '@kbn/server-route-repository';
 
-export function createApmApiClient(st: supertest.SuperTest<supertest.Test>) {
+export function createApmApiClient(st: supertest.Agent) {
   return async <TEndpoint extends APIEndpoint>(
     options: {
       type?: 'form-data';
       endpoint: TEndpoint;
+      spaceId?: string;
     } & APIClientRequestParamsOf<TEndpoint> & { params?: { query?: { _inspect?: boolean } } }
   ): Promise<SupertestReturnType<TEndpoint>> => {
     const { endpoint, type } = options;
@@ -27,7 +28,11 @@ export function createApmApiClient(st: supertest.SuperTest<supertest.Test>) {
     const params = 'params' in options ? (options.params as Record<string, any>) : {};
 
     const { method, pathname, version } = formatRequest(endpoint, params.path);
-    const url = format({ pathname, query: params?.query });
+    const pathnameWithSpaceId = options.spaceId ? `/s/${options.spaceId}${pathname}` : pathname;
+    const url = format({ pathname: pathnameWithSpaceId, query: params?.query });
+
+    // eslint-disable-next-line no-console
+    console.debug(`Calling APM API: ${method.toUpperCase()} ${url}`);
 
     const headers: Record<string, string> = {
       'kbn-xsrf': 'foo',
@@ -46,7 +51,7 @@ export function createApmApiClient(st: supertest.SuperTest<supertest.Test>) {
         .set('Content-type', 'multipart/form-data');
 
       for (const field of fields) {
-        formDataRequest.field(field[0], field[1]);
+        void formDataRequest.field(field[0], field[1]);
       }
 
       res = await formDataRequest;

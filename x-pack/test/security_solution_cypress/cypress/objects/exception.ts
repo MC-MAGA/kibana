@@ -30,7 +30,7 @@ export interface ExceptionListItem {
   namespace_type: 'single' | 'agnostic';
   tags: string[];
   type: 'simple';
-  entries: Array<{ field: string; operator: string; type: string; value: string[] }>;
+  entries: Array<{ field: string; operator: string; type: string; value: string[] | string }>;
   expire_time?: string;
 }
 
@@ -58,8 +58,9 @@ export const getException = (): Exception => ({
 });
 
 export const expectedExportedExceptionList = (
-  exceptionListResponse: Cypress.Response<ExceptionListSchema>
+  exceptionListResponse: Cypress.Response<ExceptionListSchema>,
+  username: string
 ): string => {
   const jsonRule = exceptionListResponse.body;
-  return `{"_version":"${jsonRule._version}","created_at":"${jsonRule.created_at}","created_by":"system_indices_superuser","description":"${jsonRule.description}","id":"${jsonRule.id}","immutable":false,"list_id":"${jsonRule.list_id}","name":"${jsonRule.name}","namespace_type":"single","os_types":[],"tags":[],"tie_breaker_id":"${jsonRule.tie_breaker_id}","type":"${jsonRule.type}","updated_at":"${jsonRule.updated_at}","updated_by":"system_indices_superuser","version":1}\n{"exported_exception_list_count":1,"exported_exception_list_item_count":0,"missing_exception_list_item_count":0,"missing_exception_list_items":[],"missing_exception_lists":[],"missing_exception_lists_count":0}\n`;
+  return `{"_version":"${jsonRule._version}","created_at":"${jsonRule.created_at}","created_by":"${username}","description":"${jsonRule.description}","id":"${jsonRule.id}","immutable":false,"list_id":"${jsonRule.list_id}","name":"${jsonRule.name}","namespace_type":"single","os_types":[],"tags":[],"tie_breaker_id":"${jsonRule.tie_breaker_id}","type":"${jsonRule.type}","updated_at":"${jsonRule.updated_at}","updated_by":"${username}","version":1}\n{"exported_exception_list_count":1,"exported_exception_list_item_count":0,"missing_exception_list_item_count":0,"missing_exception_list_items":[],"missing_exception_lists":[],"missing_exception_lists_count":0}\n`;
 };

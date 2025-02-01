@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { useEffect, useState } from 'react';
@@ -23,27 +24,25 @@ import {
   EuiFormRow,
 } from '@elastic/eui';
 
-import useObservable from 'react-use/lib/useObservable';
-
 import { GuidedOnboardingPluginStart } from '@kbn/guided-onboarding-plugin/public/types';
 
 interface GuidedOnboardingExampleAppDeps {
-  guidedOnboarding: GuidedOnboardingPluginStart;
+  guidedOnboarding?: GuidedOnboardingPluginStart;
 }
 
 export const StepOne = ({ guidedOnboarding }: GuidedOnboardingExampleAppDeps) => {
-  const { guidedOnboardingApi } = guidedOnboarding;
-
   const [isTourStepOpen, setIsTourStepOpen] = useState<boolean>(false);
   const [indexName, setIndexName] = useState('test1234');
 
-  const isTourActive = useObservable(
-    guidedOnboardingApi!.isGuideStepActive$('testGuide', 'step1'),
-    false
-  );
   useEffect(() => {
-    setIsTourStepOpen(isTourActive);
-  }, [isTourActive]);
+    const subscription = guidedOnboarding?.guidedOnboardingApi
+      ?.isGuideStepActive$('testGuide', 'step1')
+      .subscribe((isStepActive) => {
+        setIsTourStepOpen(isStepActive);
+      });
+    return () => subscription?.unsubscribe();
+  }, [guidedOnboarding]);
+
   return (
     <>
       <EuiPageHeader>
@@ -107,9 +106,13 @@ export const StepOne = ({ guidedOnboarding }: GuidedOnboardingExampleAppDeps) =>
               >
                 <EuiButton
                   onClick={async () => {
-                    await guidedOnboardingApi?.completeGuideStep('testGuide', 'step1', {
-                      indexName,
-                    });
+                    await guidedOnboarding?.guidedOnboardingApi?.completeGuideStep(
+                      'testGuide',
+                      'step1',
+                      {
+                        indexName,
+                      }
+                    );
                   }}
                 >
                   Complete step 1

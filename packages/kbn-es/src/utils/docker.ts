@@ -1,35 +1,47 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
 import chalk from 'chalk';
 import execa from 'execa';
 import fs from 'fs';
 import Fsp from 'fs/promises';
+import pRetry from 'p-retry';
 import { resolve, basename, join } from 'path';
 import { Client, ClientOptions, HttpConnection } from '@elastic/elasticsearch';
 
 import { ToolingLog } from '@kbn/tooling-log';
 import { kibanaPackageJson as pkg, REPO_ROOT } from '@kbn/repo-info';
+import { CA_CERT_PATH, ES_P12_PASSWORD, ES_P12_PATH } from '@kbn/dev-utils';
 import {
-  CA_CERT_PATH,
-  ES_P12_PASSWORD,
-  ES_P12_PATH,
-  kibanaDevServiceAccount,
-} from '@kbn/dev-utils';
+  MOCK_IDP_REALM_NAME,
+  MOCK_IDP_ENTITY_ID,
+  MOCK_IDP_ATTRIBUTE_PRINCIPAL,
+  MOCK_IDP_ATTRIBUTE_ROLES,
+  MOCK_IDP_ATTRIBUTE_EMAIL,
+  MOCK_IDP_ATTRIBUTE_NAME,
+  ensureSAMLRoleMapping,
+  createMockIdpMetadata,
+} from '@kbn/mock-idp-utils';
 
+import { getServerlessImageTag, getCommitUrl } from './extract_image_info';
+import { waitForSecurityIndex } from './wait_for_security_index';
 import { createCliError } from '../errors';
 import { EsClusterExecOptions } from '../cluster_exec_options';
 import {
   SERVERLESS_RESOURCES_PATHS,
   SERVERLESS_SECRETS_PATH,
   SERVERLESS_JWKS_PATH,
+  SERVERLESS_IDP_METADATA_PATH,
   SERVERLESS_CONFIG_PATH,
   SERVERLESS_FILES_PATH,
   SERVERLESS_SECRETS_SSL_PATH,
+  SERVERLESS_ROLES_ROOT_PATH,
 } from '../paths';
 import {
   ELASTIC_SERVERLESS_SUPERUSER,
@@ -51,6 +63,13 @@ interface BaseOptions extends ImageOptions {
   files?: string | string[];
 }
 
+export const serverlessProjectTypes = new Set<string>(['es', 'oblt', 'security']);
+export const isServerlessProjectType = (value: string): value is ServerlessProjectType => {
+  return serverlessProjectTypes.has(value);
+};
+
+export type ServerlessProjectType = 'es' | 'oblt' | 'security';
+
 export interface DockerOptions extends EsClusterExecOptions, BaseOptions {
   dockerCmd?: string;
 }
@@ -58,16 +77,22 @@ export interface DockerOptions extends EsClusterExecOptions, BaseOptions {
 export interface ServerlessOptions extends EsClusterExecOptions, BaseOptions {
   /** Publish ES docker container on additional host IP */
   host?: string;
+  /**  Serverless project type */
+  projectType: ServerlessProjectType;
   /** Clean (or delete) all data created by the ES cluster after it is stopped */
   clean?: boolean;
-  /** Path to the directory where the ES cluster will store data */
+  /** Full path where the ES cluster will store data */
   basePath: string;
+  /** Directory in basePath where the ES cluster will store data */
+  dataPath?: string;
   /** If this process exits, leave the ES cluster running in the background */
   skipTeardown?: boolean;
   /** Start the ES cluster in the background instead of remaining attached: useful for running tests */
   background?: boolean;
   /** Wait for the ES cluster to be ready to serve requests */
   waitForReady?: boolean;
+  /** Fully qualified URL where Kibana is hosted (including base path) */
+  kibanaUrl?: string;
   /**
    * Resource file(s) to overwrite
    * (see list of files that can be overwritten under `packages/kbn-es/src/serverless_resources/users`)
@@ -87,8 +112,6 @@ const DOCKER_REGISTRY = 'docker.elastic.co';
 
 const DOCKER_BASE_CMD = [
   'run',
-
-  '--rm',
 
   '-t',
 
@@ -126,8 +149,6 @@ export const ES_SERVERLESS_DEFAULT_IMAGE = `${ES_SERVERLESS_REPO_KIBANA}:${ES_SE
 const SHARED_SERVERLESS_PARAMS = [
   'run',
 
-  '--rm',
-
   '--detach',
 
   '--interactive',
@@ -148,9 +169,6 @@ const SHARED_SERVERLESS_PARAMS = [
 
   '--env',
   'stateless.object_store.type=fs',
-
-  '--env',
-  'stateless.object_store.bucket=stateless',
 ];
 
 // only allow certain ES args to be overwrote by options
@@ -362,8 +380,13 @@ export async function maybeCreateDockerNetwork(log: ToolingLog) {
   log.indent(-4);
 }
 
+const RETRYABLE_DOCKER_PULL_ERROR_MESSAGES = [
+  'connection refused',
+  'i/o timeout',
+  'Client.Timeout',
+];
+
 /**
- *
  * Pull a Docker image if needed. Ensures latest image.
  * Stops serverless from pulling the same image in each node's promise and
  * gives better control of log output, instead of falling back to docker run.
@@ -371,17 +394,66 @@ export async function maybeCreateDockerNetwork(log: ToolingLog) {
 export async function maybePullDockerImage(log: ToolingLog, image: string) {
   log.info(chalk.bold(`Checking for image: ${image}`));
 
-  await execa('docker', ['pull', image], {
-    // inherit is required to show Docker pull output
-    stdio: ['ignore', 'inherit', 'pipe'],
-  }).catch(({ message }) => {
-    throw createCliError(
-      `Error pulling image. This is likely an issue authenticating with ${DOCKER_REGISTRY}.
+  await pRetry(
+    async () => {
+      await execa('docker', ['pull', image], {
+        // inherit is required to show Docker pull output
+        stdio: ['ignore', 'inherit', 'pipe'],
+      }).catch(({ message }) => {
+        const errorMessage = `Error pulling image. This is likely an issue authenticating with ${DOCKER_REGISTRY}.
 Visit ${chalk.bold.cyan('https://docker-auth.elastic.co/github_auth')} to login.
 
-${message}`
-    );
-  });
+${message}`;
+        throw createCliError(errorMessage);
+      });
+    },
+    {
+      retries: 2,
+      onFailedAttempt: (error) => {
+        // Only retry if retryable error messages are found in the error message.
+        if (
+          RETRYABLE_DOCKER_PULL_ERROR_MESSAGES.every(
+            (msg) => !error?.message?.includes('connection refused')
+          )
+        ) {
+          throw error;
+        }
+      },
+    }
+  );
+}
+
+/**
+ * When we're working with :latest or :latest-verified, it is useful to expand what version they refer to
+ */
+export async function printESImageInfo(log: ToolingLog, image: string) {
+  let imageFullName = image;
+  if (image.includes('serverless')) {
+    const imageTag = (await getServerlessImageTag(image)) ?? image.split(':').pop() ?? '';
+    const imageBase = image.replace(/:.*/, '');
+    imageFullName = `${imageBase}:${imageTag}`;
+  }
+
+  const revisionUrl = await getCommitUrl(image);
+  log.info(`Using ES image: ${imageFullName} (${revisionUrl})`);
+}
+
+export async function cleanUpDanglingContainers(log: ToolingLog) {
+  log.info(chalk.bold('Cleaning up dangling Docker containers.'));
+
+  try {
+    const serverlessContainerNames = SERVERLESS_NODES.map(({ name }) => name);
+
+    for (const name of serverlessContainerNames) {
+      await execa('docker', ['container', 'rm', name, '--force']).catch(() => {
+        // Ignore errors if the container doesn't exist
+      });
+    }
+
+    log.success('Cleaned up dangling Docker containers.');
+  } catch (e) {
+    log.error(e);
+  }
 }
 
 export async function detectRunningNodes(
@@ -395,19 +467,19 @@ export async function detectRunningNodes(
   }, []);
 
   const { stdout } = await execa('docker', ['ps', '--quiet'].concat(namesCmd));
-  const runningNodes = stdout.split(/\r?\n/).filter((s) => s);
+  const runningNodeIds = stdout.split(/\r?\n/).filter((s) => s);
 
-  if (runningNodes.length) {
+  if (runningNodeIds.length) {
     if (options.kill) {
       log.info(chalk.bold('Killing running ES Nodes.'));
-      await execa('docker', ['kill'].concat(runningNodes));
-
-      return;
+      await execa('docker', ['kill'].concat(runningNodeIds));
+    } else {
+      throw createCliError(
+        'ES has already been started, pass --kill to automatically stop the nodes on startup.'
+      );
     }
-
-    throw createCliError(
-      'ES has already been started, pass --kill to automatically stop the nodes on startup.'
-    );
+  } else {
+    log.info('No running nodes detected.');
   }
 }
 
@@ -425,8 +497,10 @@ async function setupDocker({
 }) {
   await verifyDockerInstalled(log);
   await detectRunningNodes(log, options);
+  await cleanUpDanglingContainers(log);
   await maybeCreateDockerNetwork(log);
   await maybePullDockerImage(log, image);
+  await printESImageInfo(log, image);
 }
 
 /**
@@ -459,6 +533,58 @@ export function resolveEsArgs(
     esArgs.set('ELASTIC_PASSWORD', password);
   }
 
+  // Configure mock identify provider (ES only supports SAML when running in SSL mode)
+  if (
+    ssl &&
+    'kibanaUrl' in options &&
+    options.kibanaUrl &&
+    esArgs.get('xpack.security.enabled') !== 'false'
+  ) {
+    const trimTrailingSlash = (url: string) => (url.endsWith('/') ? url.slice(0, -1) : url);
+
+    // The mock IDP setup requires a custom role mapping, but since native role mappings are disabled by default in
+    // Serverless, we have to re-enable them explicitly here.
+    esArgs.set('xpack.security.authc.native_role_mappings.enabled', 'true');
+
+    esArgs.set(`xpack.security.authc.realms.saml.${MOCK_IDP_REALM_NAME}.order`, '0');
+    esArgs.set(
+      `xpack.security.authc.realms.saml.${MOCK_IDP_REALM_NAME}.idp.metadata.path`,
+      `${SERVERLESS_CONFIG_PATH}secrets/idp_metadata.xml`
+    );
+    esArgs.set(
+      `xpack.security.authc.realms.saml.${MOCK_IDP_REALM_NAME}.idp.entity_id`,
+      MOCK_IDP_ENTITY_ID
+    );
+    esArgs.set(
+      `xpack.security.authc.realms.saml.${MOCK_IDP_REALM_NAME}.sp.entity_id`,
+      trimTrailingSlash(options.kibanaUrl)
+    );
+    esArgs.set(
+      `xpack.security.authc.realms.saml.${MOCK_IDP_REALM_NAME}.sp.acs`,
+      `${trimTrailingSlash(options.kibanaUrl)}/api/security/saml/callback`
+    );
+    esArgs.set(
+      `xpack.security.authc.realms.saml.${MOCK_IDP_REALM_NAME}.sp.logout`,
+      `${trimTrailingSlash(options.kibanaUrl)}/logout`
+    );
+    esArgs.set(
+      `xpack.security.authc.realms.saml.${MOCK_IDP_REALM_NAME}.attributes.principal`,
+      MOCK_IDP_ATTRIBUTE_PRINCIPAL
+    );
+    esArgs.set(
+      `xpack.security.authc.realms.saml.${MOCK_IDP_REALM_NAME}.attributes.groups`,
+      MOCK_IDP_ATTRIBUTE_ROLES
+    );
+    esArgs.set(
+      `xpack.security.authc.realms.saml.${MOCK_IDP_REALM_NAME}.attributes.name`,
+      MOCK_IDP_ATTRIBUTE_NAME
+    );
+    esArgs.set(
+      `xpack.security.authc.realms.saml.${MOCK_IDP_REALM_NAME}.attributes.mail`,
+      MOCK_IDP_ATTRIBUTE_EMAIL
+    );
+  }
+
   return Array.from(esArgs).flatMap((e) => ['--env', e.join('=')]);
 }
 
@@ -479,18 +605,34 @@ export function getDockerFileMountPath(hostPath: string) {
  * Setup local volumes for Serverless ES
  */
 export async function setupServerlessVolumes(log: ToolingLog, options: ServerlessOptions) {
-  const { basePath, clean, ssl, files, resources } = options;
-  const objectStorePath = resolve(basePath, 'stateless');
+  const {
+    basePath,
+    clean,
+    ssl,
+    kibanaUrl,
+    files,
+    resources,
+    projectType,
+    dataPath = 'stateless',
+  } = options;
+  const objectStorePath = resolve(basePath, dataPath);
 
   log.info(chalk.bold(`Checking for local serverless ES object store at ${objectStorePath}`));
   log.indent(4);
 
-  if (clean && fs.existsSync(objectStorePath)) {
+  let exists = null;
+  try {
+    await Fsp.access(objectStorePath);
+    exists = true;
+  } catch (e) {
+    exists = false;
+  }
+  if (clean && exists) {
     log.info('Cleaning existing object store.');
     await Fsp.rm(objectStorePath, { recursive: true, force: true });
   }
 
-  if (clean || !fs.existsSync(objectStorePath)) {
+  if (clean || !exists) {
     await Fsp.mkdir(objectStorePath, { recursive: true }).then(() =>
       log.info('Created new object store.')
     );
@@ -505,7 +647,12 @@ export async function setupServerlessVolumes(log: ToolingLog, options: Serverles
 
   log.indent(-4);
 
-  const volumeCmds = ['--volume', `${basePath}:/objectstore:z`];
+  const volumeCmds = [
+    '--volume',
+    `${basePath}:/objectstore:z`,
+    '--env',
+    `stateless.object_store.bucket=${dataPath}`,
+  ];
 
   if (files) {
     const _files = typeof files === 'string' ? [files] : files;
@@ -525,7 +672,12 @@ export async function setupServerlessVolumes(log: ToolingLog, options: Serverles
       }, {} as Record<string, string>)
     : {};
 
-  const serverlessResources = SERVERLESS_RESOURCES_PATHS.reduce<string[]>((acc, path) => {
+  // Read roles for the specified projectType
+  const rolesResourcePath = resolve(SERVERLESS_ROLES_ROOT_PATH, projectType, 'roles.yml');
+
+  const resourcesPaths = [...SERVERLESS_RESOURCES_PATHS, rolesResourcePath];
+
+  const serverlessResources = resourcesPaths.reduce<string[]>((acc, path) => {
     const fileName = basename(path);
     let localFilePath = path;
 
@@ -544,9 +696,19 @@ export async function setupServerlessVolumes(log: ToolingLog, options: Serverles
     throw new Error(
       `Unsupported ES serverless --resources value(s):\n  ${Object.values(
         resourceFileOverrides
-      ).join('  \n')}\n\nValid resources: ${SERVERLESS_RESOURCES_PATHS.map((filePath) =>
-        basename(filePath)
-      ).join(' | ')}`
+      ).join('  \n')}\n\nValid resources: ${resourcesPaths
+        .map((filePath) => basename(filePath))
+        .join(' | ')}`
+    );
+  }
+
+  // Create and add meta data for mock identity provider
+  if (ssl && kibanaUrl) {
+    const metadata = await createMockIdpMetadata(kibanaUrl);
+    await Fsp.writeFile(SERVERLESS_IDP_METADATA_PATH, metadata);
+    volumeCmds.push(
+      '--volume',
+      `${SERVERLESS_IDP_METADATA_PATH}:${SERVERLESS_CONFIG_PATH}secrets/idp_metadata.xml:z`
     );
   }
 
@@ -558,7 +720,6 @@ export async function setupServerlessVolumes(log: ToolingLog, options: Serverles
     `${
       ssl ? SERVERLESS_SECRETS_SSL_PATH : SERVERLESS_SECRETS_PATH
     }:${SERVERLESS_CONFIG_PATH}secrets/secrets.json:z`,
-
     '--volume',
     `${SERVERLESS_JWKS_PATH}:${SERVERLESS_CONFIG_PATH}secrets/jwks.json:z`
   );
@@ -627,6 +788,7 @@ export async function runServerlessCluster(log: ToolingLog, options: ServerlessO
   const volumeCmd = await setupServerlessVolumes(log, options);
   const portCmd = resolvePort(options);
 
+  // This is where nodes are started
   const nodeNames = await Promise.all(
     SERVERLESS_NODES.map(async (node, i) => {
       await runServerlessEsNode(log, {
@@ -646,47 +808,65 @@ export async function runServerlessCluster(log: ToolingLog, options: ServerlessO
   Login with username ${chalk.bold.cyan(ELASTIC_SERVERLESS_SUPERUSER)} or ${chalk.bold.cyan(
     SYSTEM_INDICES_SUPERUSER
   )} and password ${chalk.bold.magenta(ELASTIC_SERVERLESS_SUPERUSER_PASSWORD)}
+  See packages/kbn-es/src/serverless_resources/README.md for additional information on authentication.
   Stop the cluster:     ${chalk.bold(`docker container stop ${nodeNames.join(' ')}`)}
     `);
-
-  if (options.ssl) {
-    log.warning(`SSL has been enabled for ES. Kibana should be started with the SSL flag so that it can authenticate with ES.
-  See packages/kbn-es/src/serverless_resources/README.md for additional information on authentication.
-    `);
-  }
 
   if (!options.skipTeardown) {
     // SIGINT will not trigger in FTR (see cluster.runServerless for FTR signal)
     process.on('SIGINT', () => teardownServerlessClusterSync(log, options));
   }
 
+  const esNodeUrl = `${options.ssl ? 'https' : 'http'}://${portCmd[1].substring(
+    0,
+    portCmd[1].lastIndexOf(':')
+  )}`;
+
+  const client = getESClient({
+    node: esNodeUrl,
+    auth: {
+      username: ELASTIC_SERVERLESS_SUPERUSER,
+      password: ELASTIC_SERVERLESS_SUPERUSER_PASSWORD,
+    },
+    ...(options.ssl
+      ? {
+          tls: {
+            ca: [fs.readFileSync(CA_CERT_PATH)],
+            // NOTE: Even though we've added ca into the tls options, we are using 127.0.0.1 instead of localhost
+            // for the ip which is not validated. As such we are getting the error
+            // Hostname/IP does not match certificate's altnames: IP: 127.0.0.1 is not in the cert's list:
+            // To work around that we are overriding the function checkServerIdentity too
+            checkServerIdentity: () => {
+              return undefined;
+            },
+          },
+        }
+      : {}),
+  });
+
+  const readyPromise = waitUntilClusterReady({ client, expectedStatus: 'green', log }).then(
+    async () => {
+      if (!options.ssl || !options.kibanaUrl) {
+        return;
+      }
+
+      await ensureSAMLRoleMapping(client);
+
+      log.success(
+        `Created role mapping for mock identity provider. You can now login using ${chalk.bold.cyan(
+          MOCK_IDP_REALM_NAME
+        )} realm`
+      );
+    }
+  );
+
   if (options.waitForReady) {
     log.info('Waiting until ES is ready to serve requests...');
-
-    const esNodeUrl = `${options.ssl ? 'https' : 'http'}://${portCmd[1].substring(
-      0,
-      portCmd[1].lastIndexOf(':')
-    )}`;
-
-    const client = getESClient({
-      node: esNodeUrl,
-      auth: { bearer: kibanaDevServiceAccount.token },
-      ...(options.ssl
-        ? {
-            tls: {
-              ca: [fs.readFileSync(CA_CERT_PATH)],
-              // NOTE: Even though we've added ca into the tls options, we are using 127.0.0.1 instead of localhost
-              // for the ip which is not validated. As such we are getting the error
-              // Hostname/IP does not match certificate's altnames: IP: 127.0.0.1 is not in the cert's list:
-              // To work around that we are overriding the function checkServerIdentity too
-              checkServerIdentity: () => {
-                return undefined;
-              },
-            },
-          }
-        : {}),
-    });
-    await waitUntilClusterReady({ client, expectedStatus: 'green', log });
+    await readyPromise;
+    if (!options.esArgs || !options.esArgs.includes('xpack.security.enabled=false')) {
+      // If security is not disabled, make sure the security index exists before running the test to avoid flakiness
+      await waitForSecurityIndex({ client, log });
+    }
   }
 
   if (!options.background) {

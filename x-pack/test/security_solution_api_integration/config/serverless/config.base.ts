@@ -4,35 +4,54 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
+import path from 'path';
+
 import { FtrConfigProviderContext } from '@kbn/test';
-// import { ES_RESOURCES } from '@kbn/security-solution-plugin/scripts/endpoint/common/roles_users/serverless';
+import { services } from './services';
+import { PRECONFIGURED_ACTION_CONNECTORS } from '../shared';
 
 export interface CreateTestConfigOptions {
   testFiles: string[];
   junit: { reportName: string };
+  kbnTestServerArgs?: string[];
+  kbnTestServerEnv?: Record<string, string>;
+  suiteTags?: { include?: string[]; exclude?: string[] };
 }
 
 export function createTestConfig(options: CreateTestConfigOptions) {
   return async ({ readConfigFile }: FtrConfigProviderContext) => {
     const svlSharedConfig = await readConfigFile(
-      require.resolve('../../../../test_serverless/shared/config.base.ts')
+      require.resolve('@kbn/test-suites-serverless/shared/config.base')
     );
-
     return {
       ...svlSharedConfig.getAll(),
+      suiteTags: options.suiteTags,
+      services: {
+        ...services,
+      },
       kbnTestServer: {
         ...svlSharedConfig.get('kbnTestServer'),
-        serverArgs: [...svlSharedConfig.get('kbnTestServer.serverArgs'), '--serverless=security'],
+        serverArgs: [
+          ...svlSharedConfig.get('kbnTestServer.serverArgs'),
+          '--serverless=security',
+          `--xpack.actions.preconfigured=${JSON.stringify(PRECONFIGURED_ACTION_CONNECTORS)}`,
+          ...(options.kbnTestServerArgs || []),
+          `--plugin-path=${path.resolve(
+            __dirname,
+            '../../../../../test/analytics/plugins/analytics_ftr_helpers'
+          )}`,
+        ],
+        env: {
+          ...svlSharedConfig.get('kbnTestServer.env'),
+          ...options.kbnTestServerEnv,
+        },
       },
-      // esServerlessOptions: {
-      //   resources: Object.values(ES_RESOURCES),
-      // },
       testFiles: options.testFiles,
       junit: options.junit,
 
       mochaOpts: {
         ...svlSharedConfig.get('mochaOpts'),
-        grep: '/^(?!.*@brokenInServerless).*@serverless.*/',
+        grep: '/^(?!.*(^|\\s)@skipInServerless(\\s|$)).*@serverless.*/',
       },
     };
   };

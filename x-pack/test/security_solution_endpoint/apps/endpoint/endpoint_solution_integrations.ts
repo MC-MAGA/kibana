@@ -6,11 +6,12 @@
  */
 
 import { IndexedHostsAndAlertsResponse } from '@kbn/security-solution-plugin/common/endpoint/index_data';
-import { TimelineResponse } from '@kbn/security-solution-plugin/common/api/timeline';
+import { PatchTimelineResponse } from '@kbn/security-solution-plugin/common/api/timeline';
 // @ts-expect-error we have to check types with "allowJs: false" for now, causing this import to fail
 import { kibanaPackageJson } from '@kbn/repo-info';
 import { type IndexedEndpointRuleAlerts } from '@kbn/security-solution-plugin/common/endpoint/data_loaders/index_endpoint_rule_alerts';
-import { FtrProviderContext } from '../../ftr_provider_context';
+import { FtrProviderContext } from '../../configs/ftr_provider_context';
+import { targetTags } from '../../target_tags';
 
 /**
  * Test suite is meant to cover usages of endpoint functionality or access to endpoint
@@ -24,7 +25,9 @@ export default ({ getPageObjects, getService }: FtrProviderContext) => {
   const testSubjects = getService('testSubjects');
   const pageObjects = getPageObjects(['common', 'timeline']);
 
-  describe('App level Endpoint functionality', () => {
+  describe('App level Endpoint functionality', function () {
+    targetTags(this, ['@ess']);
+
     let indexedData: IndexedHostsAndAlertsResponse;
     let indexedAlerts: IndexedEndpointRuleAlerts;
     let endpointAgentId: string;
@@ -59,9 +62,9 @@ export default ({ getPageObjects, getService }: FtrProviderContext) => {
       }
     });
 
-    // FLAKY: https://github.com/elastic/kibana/issues/165344
+    // failing tests: https://github.com/elastic/kibana/issues/170705
     describe.skip('from Timeline', () => {
-      let timeline: TimelineResponse;
+      let timeline: PatchTimelineResponse;
 
       before(async () => {
         log.info(
@@ -83,27 +86,21 @@ export default ({ getPageObjects, getService }: FtrProviderContext) => {
         );
 
         await pageObjects.timeline.navigateToTimelineList();
-        await pageObjects.timeline.openTimelineById(
-          timeline.data.persistTimeline.timeline.savedObjectId
-        );
+        await pageObjects.timeline.openTimelineById(timeline.savedObjectId);
         await pageObjects.timeline.setDateRange('Last 1 year');
         await pageObjects.timeline.waitForEvents(60_000 * 2);
       });
 
       after(async () => {
         if (timeline) {
-          log.info(
-            `Cleaning up created timeline [${timeline.data.persistTimeline.timeline.title} - ${timeline.data.persistTimeline.timeline.savedObjectId}]`
-          );
-          await timelineTestService.deleteTimeline(
-            timeline.data.persistTimeline.timeline.savedObjectId
-          );
+          log.info(`Cleaning up created timeline [${timeline.title} - ${timeline.savedObjectId}]`);
+          await timelineTestService.deleteTimeline(timeline.savedObjectId);
         }
       });
 
       it('should show Isolation action in alert details', async () => {
         await pageObjects.timeline.showEventDetails();
-        await testSubjects.click('take-action-dropdown-btn');
+        await testSubjects.click('securitySolutionFlyoutFooterDropdownButton');
         await testSubjects.clickWhenNotDisabled('isolate-host-action-item');
         await testSubjects.existOrFail('endpointHostIsolationForm');
         await testSubjects.click('hostIsolateCancelButton');

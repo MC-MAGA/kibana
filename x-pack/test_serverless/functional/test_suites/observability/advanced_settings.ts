@@ -16,15 +16,10 @@ export default ({ getPageObjects, getService }: FtrProviderContext) => {
   const browser = getService('browser');
   const retry = getService('retry');
 
-  // Failing: See https://github.com/elastic/kibana/issues/168266
-  describe.skip('Observability advanced settings', function () {
+  describe('Observability advanced settings', function () {
     before(async () => {
-      await pageObjects.svlCommonPage.login();
+      await pageObjects.svlCommonPage.loginAsViewer();
       await pageObjects.common.navigateToApp('settings');
-    });
-
-    after(async () => {
-      await pageObjects.svlCommonPage.forceLogout();
     });
 
     it('renders the page', async () => {

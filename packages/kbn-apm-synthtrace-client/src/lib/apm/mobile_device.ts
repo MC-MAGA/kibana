@@ -1,16 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Entity } from '../entity';
 import { Span } from './span';
 import { Transaction } from './transaction';
-import { ApmFields, SpanParams, GeoLocation, ApmApplicationMetricFields } from './apm_fields';
-import { generateLongId } from '../utils/generate_id';
+import { Event } from './event';
+import { ApmApplicationMetricFields, ApmFields, GeoLocation, SpanParams } from './apm_fields';
+import { generateLongIdWithSeed, generateLongId } from '../utils/generate_id';
 import { Metricset } from './metricset';
 import { ApmError } from './apm_error';
 
@@ -143,6 +145,10 @@ export class MobileDevice extends Entity<ApmFields> {
     return this;
   }
 
+  event(): Event {
+    return new Event({ ...this.fields });
+  }
+
   transaction(
     ...options:
       | [{ transactionName: string; frameworkName?: string; frameworkVersion?: string }]
@@ -224,7 +230,7 @@ export class MobileDevice extends Entity<ApmFields> {
       spanSubtype: 'http',
       'http.request.method': httpMethod,
       'url.original': httpUrl,
-      'transaction.type': 'mobile',
+      'processor.event': 'span',
     };
 
     if (this.networkConnection) {
@@ -254,9 +260,8 @@ export class MobileDevice extends Entity<ApmFields> {
     return new ApmError({
       ...this.fields,
       'error.type': 'crash',
-      'error.id': generateLongId(message),
+      'error.id': generateLongIdWithSeed(message),
       'error.exception': [{ message, ...{ type: 'crash' } }],
-      'error.grouping_name': groupingName || message,
     });
   }
 }

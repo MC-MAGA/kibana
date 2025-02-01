@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { useEffect, useState } from 'react';
@@ -16,24 +17,22 @@ import { EuiPageHeader, EuiPageSection, EuiCode } from '@elastic/eui';
 import { useParams } from 'react-router-dom';
 
 interface StepFourProps {
-  guidedOnboarding: GuidedOnboardingPluginStart;
+  guidedOnboarding?: GuidedOnboardingPluginStart;
 }
 
-export const StepFour: React.FC<StepFourProps> = ({
-  guidedOnboarding: { guidedOnboardingApi },
-}) => {
+export const StepFour: React.FC<StepFourProps> = ({ guidedOnboarding }) => {
   const { indexName } = useParams<{ indexName: string }>();
 
   const [, setIsTourStepOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    const subscription = guidedOnboardingApi
+    const subscription = guidedOnboarding?.guidedOnboardingApi
       ?.isGuideStepActive$('testGuide', 'step4')
       .subscribe((isStepActive) => {
         setIsTourStepOpen(isStepActive);
       });
     return () => subscription?.unsubscribe();
-  }, [guidedOnboardingApi]);
+  }, [guidedOnboarding]);
 
   return (
     <>
@@ -65,7 +64,7 @@ export const StepFour: React.FC<StepFourProps> = ({
 
         <EuiButton
           onClick={async () => {
-            await guidedOnboardingApi?.completeGuideStep('testGuide', 'step4');
+            await guidedOnboarding?.guidedOnboardingApi?.completeGuideStep('testGuide', 'step4');
           }}
         >
           Complete step 4

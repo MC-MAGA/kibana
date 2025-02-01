@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { spawn, spawnSync, ChildProcessWithoutNullStreams } from 'child_process';
@@ -15,7 +16,10 @@ import { filter, firstValueFrom, from, concatMap } from 'rxjs';
 import { REPO_ROOT } from '@kbn/repo-info';
 import { getConfigDirectory } from '@kbn/utils';
 
-describe('cli serverless project type', () => {
+// Failing: See https://github.com/elastic/kibana/issues/163257
+// Failing: See https://github.com/elastic/kibana/issues/163258
+// Failing: See https://github.com/elastic/kibana/issues/163259
+describe.skip('cli serverless project type', () => {
   let child: ChildProcessWithoutNullStreams | undefined;
 
   afterEach(() => {
