@@ -7,7 +7,7 @@
 
 import expect from '@kbn/expect';
 
-import { DeleteTransformsRequestSchema } from '@kbn/transform-plugin/common/api_schemas/delete_transforms';
+import { DeleteTransformsRequestSchema } from '@kbn/transform-plugin/server/routes/api_schemas/delete_transforms';
 import { TRANSFORM_STATE } from '@kbn/transform-plugin/common/constants';
 
 import { getCommonRequestHeader } from '../../../functional/services/ml/common_api';
@@ -232,12 +232,12 @@ export default ({ getService }: FtrProviderContext) => {
       before(async () => {
         await createTransform(transformId);
         await transform.api.createIndices(destinationIndex);
-        await transform.testResources.createIndexPatternIfNeeded(destinationIndex);
+        await transform.testResources.createDataViewIfNeeded(destinationIndex);
       });
 
       after(async () => {
         await transform.api.deleteIndices(destinationIndex);
-        await transform.testResources.deleteIndexPatternByTitle(destinationIndex);
+        await transform.testResources.deleteDataViewByTitle(destinationIndex);
       });
 
       it('should delete transform and destination index pattern', async () => {
@@ -261,7 +261,7 @@ export default ({ getService }: FtrProviderContext) => {
         expect(body[transformId].destDataViewDeleted.success).to.eql(true);
         await transform.api.waitForTransformNotToExist(transformId);
         await transform.api.waitForIndicesToExist(destinationIndex);
-        await transform.testResources.assertIndexPatternNotExist(destinationIndex);
+        await transform.testResources.assertDataViewNotExist(destinationIndex);
       });
     });
 
@@ -272,12 +272,12 @@ export default ({ getService }: FtrProviderContext) => {
       before(async () => {
         await createTransform(transformId);
         await transform.api.createIndices(destinationIndex);
-        await transform.testResources.createIndexPatternIfNeeded(destinationIndex);
+        await transform.testResources.createDataViewIfNeeded(destinationIndex);
       });
 
       after(async () => {
         await transform.api.deleteIndices(destinationIndex);
-        await transform.testResources.deleteIndexPatternByTitle(destinationIndex);
+        await transform.testResources.deleteDataViewByTitle(destinationIndex);
       });
 
       it('should delete transform, destination index, & destination index pattern', async () => {
@@ -301,7 +301,7 @@ export default ({ getService }: FtrProviderContext) => {
         expect(body[transformId].destDataViewDeleted.success).to.eql(true);
         await transform.api.waitForTransformNotToExist(transformId);
         await transform.api.waitForIndicesNotToExist(destinationIndex);
-        await transform.testResources.assertIndexPatternNotExist(destinationIndex);
+        await transform.testResources.assertDataViewNotExist(destinationIndex);
       });
     });
   });

@@ -17,7 +17,7 @@ import {
 
 const testDiscoverCustomUrl: DiscoverUrlConfig = {
   label: 'Show data',
-  indexPattern: 'ft_bank_marketing',
+  indexName: 'ft_bank_marketing',
   queryEntityFieldNames: ['day'],
   timeRange: TIME_RANGE_TYPE.AUTO,
 };
@@ -43,7 +43,7 @@ export default function ({ getService }: FtrProviderContext) {
     let testDashboardId: string | null = null;
     before(async () => {
       await esArchiver.loadIfNeeded('x-pack/test/functional/es_archives/ml/bm_classification');
-      await ml.testResources.createIndexPatternIfNeeded('ft_bank_marketing');
+      await ml.testResources.createDataViewIfNeeded('ft_bank_marketing');
       await ml.testResources.setKibanaTimeZoneToUTC();
       testDashboardId = await ml.testResources.createMLTestDashboardIfNeeded();
 
@@ -52,7 +52,7 @@ export default function ({ getService }: FtrProviderContext) {
 
     after(async () => {
       await ml.api.cleanMlIndices();
-      await ml.testResources.deleteIndexPatternByTitle('ft_bank_marketing');
+      await ml.testResources.deleteDataViewByTitle('ft_bank_marketing');
     });
 
     const jobId = `bm_1_${Date.now()}`;
@@ -76,7 +76,7 @@ export default function ({ getService }: FtrProviderContext) {
         dependentVariable: 'y',
         trainingPercent: 20,
         modelMemory: '60mb',
-        createIndexPattern: true,
+        createDataView: true,
         fieldStatsEntries: [
           {
             fieldName: 'age',
@@ -123,7 +123,8 @@ export default function ({ getService }: FtrProviderContext) {
                 section: 'state',
                 // Don't include the 'Create time' value entry as it's not stable.
                 expectedEntries: [
-                  'STOPPED',
+                  'Status',
+                  'stopped',
                   'Create time',
                   'Model memory limit',
                   '25mb',
@@ -201,7 +202,7 @@ export default function ({ getService }: FtrProviderContext) {
       describe(`${testData.suiteTitle}`, function () {
         after(async () => {
           await ml.api.deleteIndices(testData.destinationIndex);
-          await ml.testResources.deleteIndexPatternByTitle(testData.destinationIndex);
+          await ml.testResources.deleteDataViewByTitle(testData.destinationIndex);
         });
 
         it('loads the data frame analytics wizard', async () => {
@@ -281,9 +282,10 @@ export default function ({ getService }: FtrProviderContext) {
           await ml.dataFrameAnalyticsCreation.setScatterplotMatrixRandomizeQueryCheckState(true);
 
           await ml.testExecution.logTestStep('displays the scatterplot matrix');
-          await ml.dataFrameAnalyticsCreation.assertScatterplotMatrix(
-            testData.expected.scatterplotMatrixColorStats
-          );
+          // TODO Revisit after Borealis update is fully done
+          // await ml.dataFrameAnalyticsCreation.assertScatterplotMatrix(
+          //   testData.expected.scatterplotMatrixColorStats
+          // );
 
           await ml.testExecution.logTestStep('continues to the additional options step');
           await ml.dataFrameAnalyticsCreation.continueToAdditionalOptionsStep();
@@ -314,6 +316,10 @@ export default function ({ getService }: FtrProviderContext) {
           await ml.dataFrameAnalyticsCreation.assertDestIndexInputExists();
           await ml.dataFrameAnalyticsCreation.setDestIndex(testData.destinationIndex);
 
+          await ml.testExecution.logTestStep('displays the create data view switch');
+          await ml.dataFrameAnalyticsCreation.assertCreateDataViewSwitchExists();
+          await ml.dataFrameAnalyticsCreation.assertCreateDataViewSwitchCheckState(true);
+
           await ml.testExecution.logTestStep('continues to the validation step');
           await ml.dataFrameAnalyticsCreation.continueToValidationStep();
 
@@ -336,18 +342,12 @@ export default function ({ getService }: FtrProviderContext) {
 
           await ml.testExecution.logTestStep('continues to the create step');
           await ml.dataFrameAnalyticsCreation.continueToCreateStep();
-
-          await ml.testExecution.logTestStep('sets the create data view switch');
-          await ml.dataFrameAnalyticsCreation.assertCreateIndexPatternSwitchExists();
-          await ml.dataFrameAnalyticsCreation.setCreateIndexPatternSwitchState(
-            testData.createIndexPattern
-          );
         });
 
         it('runs the analytics job and displays it correctly in the job list', async () => {
           await ml.testExecution.logTestStep('creates and starts the analytics job');
           await ml.dataFrameAnalyticsCreation.assertCreateButtonExists();
-          await ml.dataFrameAnalyticsCreation.assertStartJobCheckboxCheckState(true);
+          await ml.dataFrameAnalyticsCreation.assertStartJobSwitchCheckState(true);
           await ml.dataFrameAnalyticsCreation.createAnalyticsJob(testData.jobId);
 
           await ml.testExecution.logTestStep('finishes analytics processing');
@@ -466,16 +466,17 @@ export default function ({ getService }: FtrProviderContext) {
           await ml.dataFrameAnalyticsResults.assertResultsTableNotEmpty();
 
           await ml.testExecution.logTestStep('displays the ROC curve chart');
-          await ml.commonUI.assertColorsInCanvasElement(
-            'mlDFAnalyticsClassificationExplorationRocCurveChart',
-            testData.expected.rocCurveColorState,
-            ['#000000'],
-            undefined,
-            undefined,
-            // increased tolerance for ROC curve chart up from 10 to 20
-            // since the returned colors vary quite a bit on each run.
-            20
-          );
+          // TODO Revisit after Borealis update is fully done
+          // await ml.commonUI.assertColorsInCanvasElement(
+          //   'mlDFAnalyticsClassificationExplorationRocCurveChart',
+          //   testData.expected.rocCurveColorState,
+          //   ['#000000'],
+          //   undefined,
+          //   undefined,
+          //   // increased tolerance for ROC curve chart up from 10 to 20
+          //   // since the returned colors vary quite a bit on each run.
+          //   20
+          // );
 
           await ml.testExecution.logTestStep(
             'sets the sample size to 10000 for the scatterplot matrix'
@@ -488,9 +489,10 @@ export default function ({ getService }: FtrProviderContext) {
           await ml.dataFrameAnalyticsResults.setScatterplotMatrixRandomizeQueryCheckState(true);
 
           await ml.testExecution.logTestStep('displays the scatterplot matrix');
-          await ml.dataFrameAnalyticsResults.assertScatterplotMatrix(
-            testData.expected.scatterplotMatrixColorStats
-          );
+          // TODO Revisit after Borealis update is fully done
+          // await ml.dataFrameAnalyticsResults.assertScatterplotMatrix(
+          //   testData.expected.scatterplotMatrixColorStats
+          // );
 
           await ml.commonUI.resetAntiAliasing();
         });

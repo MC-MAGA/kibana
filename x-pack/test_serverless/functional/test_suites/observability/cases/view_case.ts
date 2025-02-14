@@ -26,23 +26,23 @@ export default ({ getPageObject, getService }: FtrProviderContext) => {
   const header = getPageObject('header');
   const testSubjects = getService('testSubjects');
   const cases = getService('cases');
+  const svlCases = getService('svlCases');
   const find = getService('find');
-
+  const config = getService('config');
   const retry = getService('retry');
   const comboBox = getService('comboBox');
   const svlCommonNavigation = getPageObject('svlCommonNavigation');
   const svlCommonPage = getPageObject('svlCommonPage');
 
+  // https://github.com/elastic/kibana/pull/190690
+  // fails after missing `awaits` were added
   describe('Case View', function () {
-    // security_exception: action [indices:data/write/delete/byquery] is unauthorized for user [elastic] with effective roles [superuser] on restricted indices [.kibana_alerting_cases], this action is granted by the index privileges [delete,write,all]
-    this.tags(['failsOnMKI']);
     before(async () => {
-      await svlCommonPage.login();
+      await svlCommonPage.loginWithPrivilegedRole();
     });
 
     after(async () => {
-      await cases.api.deleteAllCases();
-      await svlCommonPage.forceLogout();
+      await svlCases.api.deleteAllCaseItems();
     });
 
     describe('page', () => {
@@ -235,6 +235,8 @@ export default ({ getPageObject, getService }: FtrProviderContext) => {
 
         await cases.common.selectSeverity(CaseSeverity.MEDIUM);
 
+        await header.waitUntilLoadingHasFinished();
+
         await cases.common.changeCaseStatusViaDropdownAndVerify(CaseStatuses['in-progress']);
 
         await header.waitUntilLoadingHasFinished();
@@ -272,7 +274,7 @@ export default ({ getPageObject, getService }: FtrProviderContext) => {
     });
 
     // FLAKY
-    describe.skip('Lens visualization', () => {
+    describe('Lens visualization', () => {
       before(async () => {
         await cases.testResources.installKibanaSampleData('logs');
         await createAndNavigateToCase(getPageObject, getService, owner);
@@ -280,7 +282,7 @@ export default ({ getPageObject, getService }: FtrProviderContext) => {
 
       after(async () => {
         await cases.testResources.removeKibanaSampleData('logs');
-        await cases.api.deleteAllCases();
+        await svlCases.api.deleteAllCaseItems();
       });
 
       it('adds lens visualization in description', async () => {
@@ -317,7 +319,7 @@ export default ({ getPageObject, getService }: FtrProviderContext) => {
       });
     });
 
-    describe('pagination', async () => {
+    describe('pagination', () => {
       let createdCase: any;
 
       before(async () => {
@@ -325,7 +327,7 @@ export default ({ getPageObject, getService }: FtrProviderContext) => {
       });
 
       after(async () => {
-        await cases.api.deleteAllCases();
+        await svlCases.api.deleteAllCaseItems();
       });
 
       it('initially renders user actions list correctly', async () => {
@@ -361,17 +363,15 @@ export default ({ getPageObject, getService }: FtrProviderContext) => {
 
         expect(userActionsLists).length(2);
 
-        expect(await userActionsLists[0].findAllByClassName('euiComment')).length(10);
+        expect(await userActionsLists[0].findAllByCssSelector('li')).length(10);
 
-        expect(await userActionsLists[1].findAllByClassName('euiComment')).length(4);
+        expect(await userActionsLists[1].findAllByCssSelector('li')).length(4);
 
-        testSubjects.click('cases-show-more-user-actions');
+        await testSubjects.click('cases-show-more-user-actions');
 
         await header.waitUntilLoadingHasFinished();
 
-        expect(await userActionsLists[0].findAllByClassName('euiComment')).length(20);
-
-        expect(await userActionsLists[1].findAllByClassName('euiComment')).length(4);
+        expect(await userActionsLists[0].findAllByCssSelector('li')).length(20);
       });
     });
 
@@ -437,7 +437,7 @@ export default ({ getPageObject, getService }: FtrProviderContext) => {
       });
 
       after(async () => {
-        await cases.api.deleteAllCases();
+        await svlCases.api.deleteAllCaseItems();
       });
 
       it('should set the cases title', async () => {
@@ -454,7 +454,7 @@ export default ({ getPageObject, getService }: FtrProviderContext) => {
 
         const reporterText = await reporter.getVisibleText();
 
-        expect(reporterText).to.be('elastic_serverless');
+        expect(reporterText).to.be(config.get('servers.kibana.username'));
       });
     });
 
@@ -463,13 +463,15 @@ export default ({ getPageObject, getService }: FtrProviderContext) => {
         {
           key: 'valid_key_1',
           label: 'Summary',
-          type: CustomFieldTypes.TEXT,
+          type: CustomFieldTypes.TEXT as const,
+          defaultValue: 'foobar',
           required: true,
         },
         {
           key: 'valid_key_2',
           label: 'Sync',
-          type: CustomFieldTypes.TOGGLE,
+          type: CustomFieldTypes.TOGGLE as const,
+          defaultValue: false,
           required: true,
         },
       ];
@@ -498,17 +500,17 @@ export default ({ getPageObject, getService }: FtrProviderContext) => {
       });
 
       afterEach(async () => {
-        await cases.api.deleteAllCases();
+        await svlCases.api.deleteAllCaseItems();
       });
 
       it('updates a custom field correctly', async () => {
-        const summary = await testSubjects.find(`case-text-custom-field-${customFields[0].key}`);
-        expect(await summary.getVisibleText()).equal('this is a text field value');
+        const textField = await testSubjects.find(`case-text-custom-field-${customFields[0].key}`);
+        expect(await textField.getVisibleText()).equal('this is a text field value');
 
-        const sync = await testSubjects.find(
+        const toggle = await testSubjects.find(
           `case-toggle-custom-field-form-field-${customFields[1].key}`
         );
-        expect(await sync.getAttribute('aria-checked')).equal('true');
+        expect(await toggle.getAttribute('aria-checked')).equal('true');
 
         await testSubjects.click(`case-text-custom-field-edit-button-${customFields[0].key}`);
 
@@ -526,19 +528,15 @@ export default ({ getPageObject, getService }: FtrProviderContext) => {
 
         await testSubjects.click(`case-text-custom-field-submit-button-${customFields[0].key}`);
 
-        await retry.waitFor('update toast exist', async () => {
-          return await testSubjects.exists('toastCloseButton');
-        });
+        await header.waitUntilLoadingHasFinished();
 
-        await testSubjects.click('toastCloseButton');
-
-        await sync.click();
+        await toggle.click();
 
         await header.waitUntilLoadingHasFinished();
 
-        expect(await summary.getVisibleText()).equal('this is a text field value edited!!');
+        expect(await textField.getVisibleText()).equal('this is a text field value edited!!');
 
-        expect(await sync.getAttribute('aria-checked')).equal('false');
+        expect(await toggle.getAttribute('aria-checked')).equal('false');
 
         // validate user action
         const userActions = await find.allByCssSelector(

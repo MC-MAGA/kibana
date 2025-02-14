@@ -310,9 +310,9 @@ export class GisPageObject extends FtrService {
 
     await this.setViewPopoverToggle.close();
     return {
-      lat: parseFloat(lat),
-      lon: parseFloat(lon),
-      zoom: parseFloat(zoom),
+      lat: parseFloat(lat ?? ''),
+      lon: parseFloat(lon ?? ''),
+      zoom: parseFloat(zoom ?? ''),
     };
   }
 
@@ -444,6 +444,12 @@ export class GisPageObject extends FtrService {
     );
   }
 
+  async hasErrorIconExistsOrFail(layerName: string) {
+    await this.retry.try(async () => {
+      await this.testSubjects.existOrFail(`layerTocErrorIcon${escapeLayerName(layerName)}`);
+    });
+  }
+
   /*
    * Layer panel utility functions
    */
@@ -571,12 +577,6 @@ export class GisPageObject extends FtrService {
     await this.waitForLayerDeleted(layerName);
   }
 
-  async getLayerErrorText(layerName: string) {
-    this.log.debug(`Remove layer ${layerName}`);
-    await this.openLayerPanel(layerName);
-    return await this.testSubjects.getVisibleText(`layerErrorMessage`);
-  }
-
   async fullScreenModeMenuItemExists() {
     return await this.testSubjects.exists('mapsFullScreenMode');
   }
@@ -630,7 +630,7 @@ export class GisPageObject extends FtrService {
     return mapboxStyle;
   }
 
-  async getResponse(requestName: string) {
+  async getResponse(requestName?: string) {
     await this.inspector.open();
     const response = await this._getResponse(requestName);
     await this.inspector.close();

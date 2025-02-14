@@ -9,8 +9,9 @@ import expect from '@kbn/expect';
 import { IndexedHostsAndAlertsResponse } from '@kbn/security-solution-plugin/common/endpoint/index_data';
 import { PROTECTION_NOTICE_SUPPORTED_ENDPOINT_VERSION } from '@kbn/security-solution-plugin/public/management/pages/policy/view/policy_settings_form/protection_notice_supported_endpoint_version';
 import { getPolicySettingsFormTestSubjects } from '@kbn/security-solution-plugin/public/management/pages/policy/view/policy_settings_form/mocks';
-import { FtrProviderContext } from '../../ftr_provider_context';
+import { FtrProviderContext } from '../../configs/ftr_provider_context';
 import { PolicyTestResourceInfo } from '../../services/endpoint_policy';
+import { targetTags } from '../../target_tags';
 
 export default function ({ getPageObjects, getService }: FtrProviderContext) {
   const browser = getService('browser');
@@ -26,8 +27,10 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
   const policyTestResources = getService('policyTestResources');
   const endpointTestResources = getService('endpointTestResources');
   const retry = getService('retry');
-
+  const timeout = 150_000;
   describe('When on the Endpoint Policy Details Page', function () {
+    targetTags(this, ['@ess', '@serverless']);
+
     let indexedData: IndexedHostsAndAlertsResponse;
     const formTestSubjects = getPolicySettingsFormTestSubjects();
 
@@ -65,7 +68,8 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
       });
 
       it('should display policy view', async () => {
-        this.timeout(150_000);
+        this.timeout(timeout);
+
         await retry.waitForWithTimeout('policy title is not empty', 120_000, async () => {
           return (await testSubjects.getVisibleText('header-page-title')) !== '';
         });
@@ -74,12 +78,16 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
         );
       });
 
-      it('should not hide the side navigation', async () => {
-        await testSubjects.scrollIntoView('solutionSideNavItemLink-get_started');
-        // ensure center of button is visible and not hidden by sticky bottom bar
-        await testSubjects.click('solutionSideNavItemLink-administration', 1000, 15);
-        // test cleanup: go back to policy details page
-        await pageObjects.policy.navigateToPolicyDetails(policyInfo.packagePolicy.id);
+      describe('side navigation', function () {
+        targetTags(this, ['@skipInServerless']);
+
+        it('should not hide the side navigation', async function () {
+          await testSubjects.scrollIntoView('solutionSideNavItemLink-get_started');
+          // ensure center of button is visible and not hidden by sticky bottom bar
+          await testSubjects.click('solutionSideNavItemLink-administration', 1000, 15);
+          // test cleanup: go back to policy details page
+          await pageObjects.policy.navigateToPolicyDetails(policyInfo.packagePolicy.id);
+        });
       });
 
       it('Should show/hide advanced section when button is clicked', async () => {
@@ -99,8 +107,8 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
       describe(`on the ${protection} protections card`, () => {
         let policyInfo: PolicyTestResourceInfo;
         const cardTestSubj:
-          | typeof formTestSubjects['ransomware']
-          | typeof formTestSubjects['malware'] =
+          | (typeof formTestSubjects)['ransomware']
+          | (typeof formTestSubjects)['malware'] =
           formTestSubjects[
             protection as keyof Pick<typeof formTestSubjects, 'malware' | 'ransomware'>
           ];
@@ -148,10 +156,11 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
         it('should show a tooltip on hover', async () => {
           await testSubjects.moveMouseTo(cardTestSubj.notifyCustomMessageTooltipIcon);
 
-          expect(
-            await testSubjects.getVisibleText(cardTestSubj.notifyCustomMessageTooltipInfo)
-          ).equal(
-            `Selecting the user notification option will display a notification to the host user when ${protection} is prevented or detected.\nThe user notification can be customized in the text box below. Bracketed tags can be used to dynamically populate the applicable action (such as prevented or detected) and the filename.`
+          await retry.waitFor(
+            'should show a tooltip on hover',
+            async () =>
+              (await testSubjects.getVisibleText(cardTestSubj.notifyCustomMessageTooltipInfo)) ===
+              `Selecting the user notification option will display a notification to the host user when ${protection} is prevented or detected.\nThe user notification can be customized in the text box below. Bracketed tags can be used to dynamically populate the applicable action (such as prevented or detected) and the filename.`
           );
         });
 
@@ -210,7 +219,7 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
         await pageObjects.policy.confirmAndSave();
 
         await testSubjects.existOrFail('policyDetailsSuccessMessage');
-        await testSubjects.waitForHidden('toastCloseButton');
+        await testSubjects.existOrFail('toastCloseButton');
         await pageObjects.endpoint.navigateToEndpointList();
         await pageObjects.policy.navigateToPolicyDetails(policyInfo.packagePolicy.id);
 
@@ -367,38 +376,22 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
         );
       });
 
-      // Failing: See https://github.com/elastic/kibana/issues/138776
-      it.skip('should show trusted apps card and link should go back to policy', async () => {
-        await testSubjects.existOrFail('trustedApps-fleet-integration-card');
-        await (await testSubjects.find('trustedApps-link-to-exceptions')).click();
-        await (await testSubjects.find('confirmModalConfirmButton')).click(); // Fleet show a confirm modal on unsaved changes
-        await testSubjects.existOrFail('policyDetailsPage');
-        await (await testSubjects.find('policyDetailsBackLink')).click();
-        await testSubjects.existOrFail('endpointIntegrationPolicyForm');
-      });
-      it.skip('should show event filters card and link should go back to policy', async () => {
-        await testSubjects.existOrFail('eventFilters-fleet-integration-card');
-        const eventFiltersCard = await testSubjects.find('eventFilters-fleet-integration-card');
-        await pageObjects.ingestManagerCreatePackagePolicy.scrollToCenterOfWindow(eventFiltersCard);
-        await (await testSubjects.find('eventFilters-link-to-exceptions')).click();
-        await (await testSubjects.find('confirmModalConfirmButton')).click(); // Fleet show a confirm modal on unsaved changes
-        await testSubjects.existOrFail('policyDetailsPage');
-        await (await testSubjects.find('policyDetailsBackLink')).click();
-        await testSubjects.existOrFail('endpointIntegrationPolicyForm');
-      });
-      it.skip('should show blocklists card and link should go back to policy', async () => {
-        await testSubjects.existOrFail('blocklists-fleet-integration-card');
-        const blocklistsCard = await testSubjects.find('blocklists-fleet-integration-card');
-        await pageObjects.ingestManagerCreatePackagePolicy.scrollToCenterOfWindow(blocklistsCard);
-        await (await testSubjects.find('blocklists-link-to-exceptions')).click();
-        await (await testSubjects.find('confirmModalConfirmButton')).click(); // Fleet show a confirm modal on unsaved changes
-        await testSubjects.existOrFail('policyDetailsPage');
-        await (await testSubjects.find('policyDetailsBackLink')).click();
-        await testSubjects.existOrFail('endpointIntegrationPolicyForm');
-      });
-      it.skip('should not show host isolation exceptions card because no entries', async () => {
-        await testSubjects.missingOrFail('hostIsolationExceptions-fleet-integration-card');
-      });
+      ['trustedApps', 'eventFilters', 'blocklists', 'hostIsolationExceptions'].forEach(
+        (cardName) => {
+          it(`should show ${cardName} card and link should go back to policy`, async () => {
+            await testSubjects.existOrFail(`${cardName}-fleet-integration-card`);
+
+            const card = await testSubjects.find(`${cardName}-fleet-integration-card`);
+            await pageObjects.ingestManagerCreatePackagePolicy.scrollToCenterOfWindow(card);
+            await (await testSubjects.find(`${cardName}-link-to-exceptions`)).click();
+
+            await testSubjects.existOrFail('policyDetailsPage');
+
+            await (await testSubjects.find('policyDetailsBackLink')).click();
+            await testSubjects.existOrFail('endpointIntegrationPolicyForm');
+          });
+        }
+      );
     });
   });
 }

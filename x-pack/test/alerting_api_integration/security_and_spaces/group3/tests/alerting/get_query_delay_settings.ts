@@ -39,16 +39,17 @@ export default function getQueryDelaySettingsTests({ getService }: FtrProviderCo
             case 'space_1_all at space2':
             case 'space_1_all_with_restricted_fixture at space1':
             case 'space_1_all_alerts_none_actions at space1':
+            case 'global_read at space1':
+            case 'space_1_all at space1':
               expect(response.statusCode).to.eql(403);
               expect(response.body).to.eql({
                 error: 'Forbidden',
-                message: 'Forbidden',
+                message:
+                  'API [GET /internal/alerting/rules/settings/_query_delay] is unauthorized for user, this action is granted by the Kibana privileges [read-query-delay-settings]',
                 statusCode: 403,
               });
               break;
-            case 'global_read at space1':
             case 'superuser at space1':
-            case 'space_1_all at space1':
               expect(response.statusCode).to.eql(200);
               expect(response.body.delay).to.eql(DEFAULT_QUERY_DELAY_SETTINGS.delay);
               expect(response.body.updated_by).to.be.a('string');

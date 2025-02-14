@@ -16,15 +16,29 @@ import {
   kibanaTestSuperuserServerless,
   getDockerFileMountPath,
 } from '@kbn/test';
-import { CA_CERT_PATH, KBN_CERT_PATH, KBN_KEY_PATH, kibanaDevServiceAccount } from '@kbn/dev-utils';
+import { CA_CERT_PATH, kibanaDevServiceAccount } from '@kbn/dev-utils';
 import { commonFunctionalServices } from '@kbn/ftr-common-functional-services';
+import { MOCK_IDP_REALM_NAME } from '@kbn/mock-idp-utils';
+import path from 'path';
+import { fleetPackageRegistryDockerImage, defineDockerServersConfig } from '@kbn/test';
 import { services } from './services';
 
 export default async () => {
+  const packageRegistryConfig = path.join(__dirname, './common/package_registry_config.yml');
+  const dockerArgs: string[] = ['-v', `${packageRegistryConfig}:/package-registry/config.yml`];
+
+  /**
+   * This is used by CI to set the docker registry port
+   * you can also define this environment variable locally when running tests which
+   * will spin up a local docker package registry locally for you
+   * if this is defined it takes precedence over the `packageRegistryOverride` variable
+   */
+  const dockerRegistryPort: string | undefined = process.env.FLEET_PACKAGE_REGISTRY_PORT;
+
   const servers = {
     kibana: {
       ...kbnTestConfig.getUrlParts(kibanaTestSuperuserServerless),
-      protocol: 'https',
+      protocol: process.env.TEST_CLOUD ? 'https' : 'http',
       certificateAuthorities: process.env.TEST_CLOUD ? undefined : [Fs.readFileSync(CA_CERT_PATH)],
     },
     elasticsearch: {
@@ -48,6 +62,17 @@ export default async () => {
 
   return {
     servers,
+    dockerServers: defineDockerServersConfig({
+      registry: {
+        enabled: !!dockerRegistryPort,
+        image: fleetPackageRegistryDockerImage,
+        portInContainer: 8080,
+        port: dockerRegistryPort,
+        args: dockerArgs,
+        waitForLogLine: 'package manifests loaded',
+        waitForLogLineTimeoutMs: 60 * 2 * 1000, // 2 minutes
+      },
+    }),
     browser: {
       acceptInsecureCerts: true,
     },
@@ -68,16 +93,11 @@ export default async () => {
         'xpack.security.authc.realms.jwt.jwt1.order=-98',
         `xpack.security.authc.realms.jwt.jwt1.pkc_jwkset_path=${getDockerFileMountPath(jwksPath)}`,
         `xpack.security.authc.realms.jwt.jwt1.token_type=access_token`,
-
-        'xpack.security.authc.realms.saml.cloud-saml-kibana.attributes.principal=urn:oid:0.0.7',
-        'xpack.security.authc.realms.saml.cloud-saml-kibana.idp.entity_id=http://www.elastic.co/saml1',
-        'xpack.security.authc.realms.saml.cloud-saml-kibana.order=101',
-        `xpack.security.authc.realms.saml.cloud-saml-kibana.idp.metadata.path=${getDockerFileMountPath(
-          idpPath
-        )}`,
-        `xpack.security.authc.realms.saml.cloud-saml-kibana.sp.acs=http://localhost:${servers.kibana.port}/api/security/saml/callback`,
-        `xpack.security.authc.realms.saml.cloud-saml-kibana.sp.entity_id=http://localhost:${servers.kibana.port}`,
-        `xpack.security.authc.realms.saml.cloud-saml-kibana.sp.logout=http://localhost:${servers.kibana.port}/logout`,
+        'serverless.indices.validate_dot_prefixes=true',
+        // controller cluster-settings
+        `cluster.service.slow_task_logging_threshold=15s`,
+        `cluster.service.slow_task_thread_dump_timeout=5s`,
+        `serverless.search.enable_replicas_for_instant_failover=true`,
       ],
       ssl: true, // SSL is required for SAML realm
     },
@@ -89,12 +109,9 @@ export default async () => {
       },
       sourceArgs: ['--no-base-path', '--env.name=development'],
       serverArgs: [
-        '--server.ssl.enabled=true',
-        `--server.ssl.key=${KBN_KEY_PATH}`,
-        `--server.ssl.certificate=${KBN_CERT_PATH}`,
-        `--server.ssl.certificateAuthorities=${CA_CERT_PATH}`,
         `--server.restrictInternalApis=true`,
         `--server.port=${servers.kibana.port}`,
+        `--server.prototypeHardening=true`,
         '--status.allowAnonymous=true',
         `--migrations.zdt.runOnRoles=${JSON.stringify(['ui'])}`,
         // We shouldn't embed credentials into the URL since Kibana requests to Elasticsearch should
@@ -121,10 +138,24 @@ export default async () => {
             appenders: ['deprecation'],
           },
         ])}`,
+        // Add meta info to the logs so FTR logs are more actionable
+        `--logging.appenders.default=${JSON.stringify({
+          type: 'console',
+          layout: {
+            type: 'pattern',
+            pattern: '[%date][%level][%logger] %message %meta',
+          },
+        })}`,
+        `--logging.appenders.console=${JSON.stringify({
+          type: 'console',
+          layout: {
+            type: 'pattern',
+            pattern: '[%date][%level][%logger] %message %meta',
+          },
+        })}`,
         // This ensures that we register the Security SAML API endpoints.
         // In the real world the SAML config is injected by control plane.
         `--plugin-path=${samlIdPPlugin}`,
-        '--xpack.cloud.id=ftr_fake_cloud_id',
         // Ensure that SAML is used as the default authentication method whenever a user navigates to Kibana. In other
         // words, Kibana should attempt to authenticate the user using the provider with the lowest order if the Login
         // Selector is disabled (which is how Serverless Kibana is configured). By declaring `cloud-basic` with a higher
@@ -132,11 +163,24 @@ export default async () => {
         // user navigates to `/login` page directly and enters username and password in the login form.
         '--xpack.security.authc.selector.enabled=false',
         `--xpack.security.authc.providers=${JSON.stringify({
-          saml: { 'cloud-saml-kibana': { order: 0, realm: 'cloud-saml-kibana' } },
+          saml: { 'cloud-saml-kibana': { order: 0, realm: MOCK_IDP_REALM_NAME } },
           basic: { 'cloud-basic': { order: 1 } },
         })}`,
         '--xpack.encryptedSavedObjects.encryptionKey="wuGNaIhoMpk5sO4UBxgr3NyW1sFcLgIf"',
         `--server.publicBaseUrl=${servers.kibana.protocol}://${servers.kibana.hostname}:${servers.kibana.port}`,
+        // configure security reponse header report-to settings to mimic MKI configuration
+        `--csp.report_to=${JSON.stringify(['violations-endpoint'])}`,
+        `--permissionsPolicy.report_to=${JSON.stringify(['violations-endpoint'])}`,
+        // normally below is injected by control plane
+        '--xpack.cloud.id=ftr_fake_cloud_id',
+        `--xpack.cloud.serverless.project_id=fakeprojectid`,
+        `--xpack.cloud.base_url=https://fake-cloud.elastic.co`,
+        `--xpack.cloud.projects_url=/projects/`,
+        `--xpack.cloud.profile_url=/user/settings/`,
+        `--xpack.cloud.billing_url=/billing/overview/`,
+        `--xpack.cloud.deployments_url=/deployments`,
+        `--xpack.cloud.organization_url=/account/`,
+        `--xpack.cloud.users_and_roles_url=/account/members/`,
       ],
     },
 
@@ -157,7 +201,7 @@ export default async () => {
       try: 120 * 1000,
       waitFor: 20 * 1000,
       esRequestTimeout: 30 * 1000,
-      kibanaReportCompletion: 60 * 1000,
+      kibanaReportCompletion: 600 * 1000,
       kibanaStabilize: 15 * 1000,
       navigateStatusPageCheck: 250,
       waitForExists: 2500,

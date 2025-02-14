@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import { cleanKibana, resetRulesTableState, deleteAlertsAndRules } from '../../../../tasks/common';
+import { deleteAlertsAndRules } from '../../../../tasks/api_calls/common';
+import { resetRulesTableState } from '../../../../tasks/common';
 import { login } from '../../../../tasks/login';
 import { visitRulesManagementTable } from '../../../../tasks/rules_management';
 import {
@@ -29,17 +30,12 @@ import {
 import { disableAutoRefresh } from '../../../../tasks/alerts_detection_rules';
 import { getNewRule } from '../../../../objects/rule';
 
-describe('Rules table: filtering', { tags: ['@ess', '@serverless'] }, () => {
-  before(() => {
-    cleanKibana();
-  });
-
+describe('Rules table: filtering', { tags: ['@ess', '@serverless', '@serverlessQA'] }, () => {
   beforeEach(() => {
     login();
     // Make sure persisted rules table state is cleared
     resetRulesTableState();
     deleteAlertsAndRules();
-    cy.task('esArchiverResetKibana');
   });
 
   describe('Last response filter', () => {
@@ -77,8 +73,8 @@ describe('Rules table: filtering', { tags: ['@ess', '@serverless'] }, () => {
           name: 'Failed rule',
           rule_id: 'failed_rule',
           index: ['test_index'],
-          // Setting a crazy large "Additional look-back time" to force a failure
-          from: 'now-9007199254746990s',
+          // Setting a malformed query to force a failure
+          query: 'host.name: "*',
           enabled: true,
         })
       );

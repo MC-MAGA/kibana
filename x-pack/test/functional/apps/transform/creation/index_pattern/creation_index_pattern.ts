@@ -25,7 +25,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
   describe('creation_index_pattern', function () {
     before(async () => {
       await esArchiver.loadIfNeeded('x-pack/test/functional/es_archives/ml/ecommerce');
-      await transform.testResources.createIndexPatternIfNeeded('ft_ecommerce', 'order_date');
+      await transform.testResources.createDataViewIfNeeded('ft_ecommerce', 'order_date');
       await transform.testResources.setKibanaTimeZoneToUTC();
 
       await transform.securityUI.loginAsTransformPowerUser();
@@ -33,7 +33,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
 
     after(async () => {
       await transform.api.cleanTransformIndices();
-      await transform.testResources.deleteIndexPatternByTitle('ft_ecommerce');
+      await transform.testResources.deleteDataViewByTitle('ft_ecommerce');
       await transform.securityUI.logout();
     });
 
@@ -124,8 +124,8 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
         numFailureRetries: '7',
         expected: {
           fullTimeRange: {
-            start: 'Jun 12, 2019 @ 00:04:19.000',
-            end: 'Jul 12, 2019 @ 23:45:36.000',
+            start: 'Jun 12, 2023 @ 00:04:19.000',
+            end: 'Jul 12, 2023 @ 23:45:36.000',
           },
           pivotAdvancedEditorValueArr: ['{', '  "group_by": {', '    "category": {'],
           pivotAdvancedEditorValue: {
@@ -199,7 +199,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
               legend: '6 categories',
               colorStats: [
                 { color: '#000000', percentage: 45 },
-                { color: '#54B399', percentage: 55 },
+                { color: '#16C5C0', percentage: 55 },
               ],
             },
             {
@@ -208,7 +208,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
               legend: '1 category',
               colorStats: [
                 { color: '#000000', percentage: 10 },
-                { color: '#54B399', percentage: 90 },
+                { color: '#16C5C0', percentage: 90 },
               ],
             },
             {
@@ -217,16 +217,16 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
               legend: 'top 20 of 46 categories',
               colorStats: [
                 { color: '#000000', percentage: 60 },
-                { color: '#54B399', percentage: 37 },
+                { color: '#16C5C0', percentage: 37 },
               ],
             },
             {
               chartAvailable: true,
               id: 'customer_full_name',
-              legend: 'top 20 of 3321 categories',
+              legend: 'top 20 of 3327 categories',
               colorStats: [
                 { color: '#000000', percentage: 25 },
-                { color: '#54B399', percentage: 75 },
+                { color: '#16C5C0', percentage: 75 },
               ],
             },
             {
@@ -235,7 +235,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
               legend: '2 categories',
               colorStats: [
                 { color: '#000000', percentage: 15 },
-                { color: '#54B399', percentage: 85 },
+                { color: '#16C5C0', percentage: 85 },
               ],
             },
             {
@@ -243,7 +243,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
               id: 'customer_id',
               legend: 'top 20 of 46 categories',
               colorStats: [
-                { color: '#54B399', percentage: 37 },
+                { color: '#16C5C0', percentage: 37 },
                 { color: '#000000', percentage: 60 },
               ],
             },
@@ -253,7 +253,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
               legend: 'top 20 of 183 categories',
               colorStats: [
                 { color: '#000000', percentage: 23 },
-                { color: '#54B399', percentage: 77 },
+                { color: '#16C5C0', percentage: 77 },
               ],
             },
             {
@@ -262,7 +262,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
               legend: '1 category',
               colorStats: [
                 { color: '#000000', percentage: 10 },
-                { color: '#54B399', percentage: 90 },
+                { color: '#16C5C0', percentage: 90 },
               ],
             },
             {
@@ -271,7 +271,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
               legend: '7 categories',
               colorStats: [
                 { color: '#000000', percentage: 20 },
-                { color: '#54B399', percentage: 75 },
+                { color: '#16C5C0', percentage: 80 },
               ],
             },
             {
@@ -280,7 +280,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
               legend: '0 - 6',
               colorStats: [
                 { color: '#000000', percentage: 20 },
-                { color: '#54B399', percentage: 75 },
+                { color: '#16C5C0', percentage: 75 },
               ],
             },
           ],
@@ -302,6 +302,9 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
           {
             identifier: 'percentiles(products.base_price)',
             label: 'products.base_price.percentiles',
+            form: {
+              transformPercentilesAggPercentsSelector: [1, 25, 50, 75, 100],
+            },
           },
           {
             identifier: 'filter(customer_phone)',
@@ -327,8 +330,8 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
         numFailureRetries: '-1',
         expected: {
           fullTimeRange: {
-            start: 'Jun 12, 2019 @ 00:04:19.000',
-            end: 'Jul 12, 2019 @ 23:45:36.000',
+            start: 'Jun 12, 2023 @ 00:04:19.000',
+            end: 'Jul 12, 2023 @ 23:45:36.000',
           },
           pivotAdvancedEditorValueArr: ['{', '  "group_by": {', '    "geoip.country_iso_code": {'],
           pivotAdvancedEditorValue: {
@@ -406,8 +409,8 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
         numFailureRetries: '0',
         expected: {
           fullTimeRange: {
-            start: 'Jun 12, 2019 @ 00:04:19.000',
-            end: 'Jul 12, 2019 @ 23:45:36.000',
+            start: 'Jun 12, 2023 @ 00:04:19.000',
+            end: 'Jul 12, 2023 @ 23:45:36.000',
           },
           pivotAdvancedEditorValueArr: ['{', '  "group_by": {', '    "customer_gender": {'],
           pivotAdvancedEditorValue: {
@@ -472,8 +475,8 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
         numFailureRetries: '101',
         expected: {
           fullTimeRange: {
-            start: 'Jun 12, 2019 @ 00:04:19.000',
-            end: 'Jul 12, 2019 @ 23:45:36.000',
+            start: 'Jun 12, 2023 @ 00:04:19.000',
+            end: 'Jul 12, 2023 @ 23:45:36.000',
           },
           latestPreview: {
             column: 0,
@@ -492,11 +495,11 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
           transformPreview: {
             column: 0,
             values: [
-              'July 12th 2019, 22:16:19',
-              'July 12th 2019, 22:50:53',
-              'July 12th 2019, 23:06:43',
-              'July 12th 2019, 23:15:22',
-              'July 12th 2019, 23:31:12',
+              'July 12th 2023, 22:16:19',
+              'July 12th 2023, 22:50:53',
+              'July 12th 2023, 23:06:43',
+              'July 12th 2023, 23:15:22',
+              'July 12th 2023, 23:31:12',
             ],
           },
           discoverQueryHits: '10',
@@ -509,7 +512,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
       describe(`${testData.suiteTitle}`, function () {
         after(async () => {
           await transform.api.deleteIndices(testData.destinationIndex);
-          await transform.testResources.deleteIndexPatternByTitle(testData.destinationIndex);
+          await transform.testResources.deleteDataViewByTitle(testData.destinationIndex);
         });
 
         it('loads the wizard for the source data', async () => {
@@ -561,6 +564,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
 
           await transform.testExecution.logTestStep('again displays an empty index preview');
           await transform.wizard.assertIndexPreviewEmpty();
+          await transform.datePicker.assertDatePickerDataTierOptionsVisible(true);
 
           await transform.testExecution.logTestStep(
             `clicks the 'Use full data' button to auto-select time range`
@@ -727,9 +731,16 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
           await transform.wizard.assertTransformDescriptionValue('');
           await transform.wizard.setTransformDescription(testData.transformDescription);
 
-          await transform.testExecution.logTestStep('inputs the destination index');
+          await transform.testExecution.logTestStep(
+            'should default the set destination index to job id switch to true'
+          );
+          await transform.wizard.assertDestIndexSameAsIdSwitchExists();
+          await transform.wizard.assertDestIndexSameAsIdCheckState(true);
+
+          await transform.testExecution.logTestStep('should input the destination index');
+          await transform.wizard.setDestIndexSameAsIdCheckState(false);
           await transform.wizard.assertDestinationIndexInputExists();
-          await transform.wizard.assertDestinationIndexValue('');
+          await transform.wizard.assertDestinationIndexValue(testData.transformId);
           await transform.wizard.setDestinationIndex(testData.destinationIndex);
 
           await transform.testExecution.logTestStep('displays the create data view switch');

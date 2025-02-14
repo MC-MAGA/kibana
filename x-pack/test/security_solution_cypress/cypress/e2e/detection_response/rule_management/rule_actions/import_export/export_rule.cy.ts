@@ -7,6 +7,7 @@
 
 import path from 'path';
 
+import { deleteAlertsAndRules } from '../../../../../tasks/api_calls/common';
 import { expectedExportedRule, getNewRule } from '../../../../../objects/rule';
 import {
   TOASTER_BODY,
@@ -29,11 +30,7 @@ import {
 } from '../../../../../tasks/api_calls/exceptions';
 import { getExceptionList } from '../../../../../objects/exception';
 import { createRule } from '../../../../../tasks/api_calls/rules';
-import {
-  cleanKibana,
-  resetRulesTableState,
-  deleteAlertsAndRules,
-} from '../../../../../tasks/common';
+import { resetRulesTableState } from '../../../../../tasks/common';
 import { login } from '../../../../../tasks/login';
 import { visit } from '../../../../../tasks/navigation';
 
@@ -55,12 +52,8 @@ const prebuiltRules = Array.from(Array(7)).map((_, i) => {
   });
 });
 
-describe('Export rules', { tags: ['@ess', '@serverless'] }, () => {
+describe('Export rules', { tags: ['@ess', '@serverless', '@skipInServerlessMKI'] }, () => {
   const downloadsFolder = Cypress.config('downloadsFolder');
-
-  before(() => {
-    cleanKibana();
-  });
 
   beforeEach(() => {
     login();
@@ -100,19 +93,25 @@ describe('Export rules', { tags: ['@ess', '@serverless'] }, () => {
     expectManagementTableRules(['Enabled rule to export']);
   });
 
-  it('shows a modal saying that no rules can be exported if all the selected rules are prebuilt', function () {
-    createAndInstallMockedPrebuiltRules(prebuiltRules);
+  // https://github.com/elastic/kibana/issues/179959
+  it(
+    'shows a modal saying that no rules can be exported if all the selected rules are prebuilt',
+    { tags: ['@skipInServerlessMKI'] },
+    function () {
+      createAndInstallMockedPrebuiltRules(prebuiltRules);
 
-    filterByElasticRules();
-    selectAllRules();
-    bulkExportRules();
+      filterByElasticRules();
+      selectAllRules();
+      bulkExportRules();
 
-    cy.get(MODAL_CONFIRMATION_BODY).contains(
-      `${prebuiltRules.length} prebuilt Elastic rules (exporting prebuilt rules is not supported)`
-    );
-  });
+      cy.get(MODAL_CONFIRMATION_BODY).contains(
+        `${prebuiltRules.length} prebuilt Elastic rules (exporting prebuilt rules is not supported)`
+      );
+    }
+  );
 
-  it('exports only custom rules', function () {
+  // https://github.com/elastic/kibana/issues/179960
+  it('exports only custom rules', { tags: ['@skipInServerless'] }, function () {
     const expectedNumberCustomRulesToBeExported = 1;
 
     createAndInstallMockedPrebuiltRules(prebuiltRules);
@@ -128,7 +127,7 @@ describe('Export rules', { tags: ['@ess', '@serverless'] }, () => {
 
     // proceed with exporting only custom rules
     cy.get(MODAL_CONFIRMATION_BTN)
-      .should('have.text', `Export ${expectedNumberCustomRulesToBeExported} custom rule`)
+      .should('have.text', `Export ${expectedNumberCustomRulesToBeExported} rule`)
       .click();
 
     getAvailablePrebuiltRulesCount().then((availablePrebuiltRulesCount) => {
@@ -164,7 +163,8 @@ describe('Export rules', { tags: ['@ess', '@serverless'] }, () => {
       );
     });
 
-    it('exports custom rules with exceptions', function () {
+    // https://github.com/elastic/kibana/issues/180029
+    it('exports custom rules with exceptions', { tags: ['@skipInServerlessMKI'] }, function () {
       // one rule with exception, one without it
       const expectedNumberCustomRulesToBeExported = 2;
 
@@ -175,7 +175,7 @@ describe('Export rules', { tags: ['@ess', '@serverless'] }, () => {
 
       // should display correct number of custom rules when one of them has exceptions
       cy.get(MODAL_CONFIRMATION_BTN)
-        .should('have.text', `Export ${expectedNumberCustomRulesToBeExported} custom rules`)
+        .should('have.text', `Export ${expectedNumberCustomRulesToBeExported} rules`)
         .click();
 
       cy.get(TOASTER_BODY).should(

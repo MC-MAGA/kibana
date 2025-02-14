@@ -16,16 +16,16 @@ const owner = SECURITY_SOLUTION_OWNER;
 
 export default ({ getService, getPageObject }: FtrProviderContext) => {
   describe('Create Case', function () {
-    this.tags(['failsOnMKI']);
     const find = getService('find');
     const cases = getService('cases');
+    const svlCases = getService('svlCases');
     const testSubjects = getService('testSubjects');
     const config = getService('config');
     const svlCommonPage = getPageObject('svlCommonPage');
     const header = getPageObject('header');
 
     before(async () => {
-      await svlCommonPage.login();
+      await svlCommonPage.loginWithPrivilegedRole();
     });
 
     beforeEach(async () => {
@@ -34,8 +34,7 @@ export default ({ getService, getPageObject }: FtrProviderContext) => {
     });
 
     after(async () => {
-      await cases.api.deleteAllCases();
-      await svlCommonPage.forceLogout();
+      await svlCases.api.deleteAllCaseItems();
     });
 
     it('creates a case', async () => {
@@ -80,14 +79,14 @@ export default ({ getService, getPageObject }: FtrProviderContext) => {
           {
             key: 'valid_key_1',
             label: 'Summary',
-            type: CustomFieldTypes.TEXT,
-            required: true,
+            type: CustomFieldTypes.TEXT as const,
+            required: false,
           },
           {
             key: 'valid_key_2',
             label: 'Sync',
-            type: CustomFieldTypes.TOGGLE,
-            required: true,
+            type: CustomFieldTypes.TOGGLE as const,
+            required: false,
           },
         ];
 
@@ -97,7 +96,7 @@ export default ({ getService, getPageObject }: FtrProviderContext) => {
         await cases.create.openCreateCasePage();
 
         // verify custom fields on create case page
-        await testSubjects.existOrFail('create-case-custom-fields');
+        await testSubjects.existOrFail('caseCustomFields');
 
         await cases.create.setTitle(caseTitle);
         await cases.create.setDescription('this is a test description');

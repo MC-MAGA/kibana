@@ -7,17 +7,20 @@
 
 import { getNewRule } from '../../../objects/rule';
 import { SELECTED_ALERTS } from '../../../screens/alerts';
-import { SERVER_SIDE_EVENT_COUNT } from '../../../screens/timeline';
+import { QUERY_EVENT_COUNT } from '../../../screens/timeline';
 import { selectAllAlerts, selectFirstPageAlerts } from '../../../tasks/alerts';
+import { deleteAlertsAndRules } from '../../../tasks/api_calls/common';
 import { createRule } from '../../../tasks/api_calls/rules';
-import { cleanKibana } from '../../../tasks/common';
 import {
   bulkInvestigateSelectedEventsInTimeline,
   selectAllEvents,
   selectFirstPageEvents,
 } from '../../../tasks/common/event_table';
 import { waitForAlertsToPopulate } from '../../../tasks/create_new_rule';
-import { waitsForEventsToBeLoaded } from '../../../tasks/hosts/events';
+import {
+  waitsForEventsToBeLoaded,
+  waitForEventsDataGridToBeLoaded,
+} from '../../../tasks/hosts/events';
 import { openEvents, openSessions } from '../../../tasks/hosts/main';
 import { login } from '../../../tasks/login';
 import { visitWithTimeRange } from '../../../tasks/navigation';
@@ -25,21 +28,17 @@ import { ALERTS_URL, hostsUrl } from '../../../urls/navigation';
 
 describe('Bulk Investigate in Timeline', { tags: ['@ess', '@serverless'] }, () => {
   before(() => {
-    cleanKibana();
     cy.task('esArchiverLoad', { archiveName: 'bulk_process' });
-    login();
   });
 
   after(() => {
-    cy.task('esArchiverUnload', 'bulk_process');
+    cy.task('esArchiverUnload', { archiveName: 'bulk_process' });
   });
 
-  context('Alerts', { tags: ['@brokenInServerless'] }, () => {
-    before(() => {
-      createRule(getNewRule());
-    });
-
+  context('Alerts', () => {
     beforeEach(() => {
+      deleteAlertsAndRules();
+      createRule(getNewRule());
       login();
       visitWithTimeRange(ALERTS_URL);
       waitForAlertsToPopulate();
@@ -52,7 +51,7 @@ describe('Bulk Investigate in Timeline', { tags: ['@ess', '@serverless'] }, () =
         const alertCount = alertCountText.split(' ')[1];
         bulkInvestigateSelectedEventsInTimeline();
         cy.get('body').should('contain.text', `${alertCount} event IDs`);
-        cy.get(SERVER_SIDE_EVENT_COUNT).should('contain.text', alertCount);
+        cy.get(QUERY_EVENT_COUNT).should('contain.text', alertCount);
       });
     });
 
@@ -63,7 +62,7 @@ describe('Bulk Investigate in Timeline', { tags: ['@ess', '@serverless'] }, () =
         const alertCount = alertCountText.split(' ')[1];
         bulkInvestigateSelectedEventsInTimeline();
         cy.get('body').should('contain.text', `${alertCount} event IDs`);
-        cy.get(SERVER_SIDE_EVENT_COUNT).should('contain.text', alertCount);
+        cy.get(QUERY_EVENT_COUNT).should('contain.text', alertCount);
       });
     });
   });
@@ -74,6 +73,7 @@ describe('Bulk Investigate in Timeline', { tags: ['@ess', '@serverless'] }, () =
       visitWithTimeRange(hostsUrl('allHosts'));
       openEvents();
       waitsForEventsToBeLoaded();
+      waitForEventsDataGridToBeLoaded();
     });
 
     it('Adding multiple events to the timeline should be successful', () => {
@@ -83,7 +83,7 @@ describe('Bulk Investigate in Timeline', { tags: ['@ess', '@serverless'] }, () =
         const alertCount = alertCountText.split(' ')[1];
         bulkInvestigateSelectedEventsInTimeline();
         cy.get('body').should('contain.text', `${alertCount} event IDs`);
-        cy.get(SERVER_SIDE_EVENT_COUNT).should('contain.text', alertCount);
+        cy.get(QUERY_EVENT_COUNT).should('contain.text', alertCount);
       });
     });
 
@@ -94,7 +94,7 @@ describe('Bulk Investigate in Timeline', { tags: ['@ess', '@serverless'] }, () =
         const alertCount = alertCountText.split(' ')[1];
         bulkInvestigateSelectedEventsInTimeline();
         cy.get('body').should('contain.text', `${alertCount} event IDs`);
-        cy.get(SERVER_SIDE_EVENT_COUNT).should('contain.text', alertCount);
+        cy.get(QUERY_EVENT_COUNT).should('contain.text', alertCount);
       });
     });
   });
@@ -105,6 +105,7 @@ describe('Bulk Investigate in Timeline', { tags: ['@ess', '@serverless'] }, () =
       visitWithTimeRange(hostsUrl('allHosts'));
       openSessions();
       waitsForEventsToBeLoaded();
+      waitForEventsDataGridToBeLoaded();
     });
 
     it('Adding multiple events to the timeline should be successful', () => {
@@ -114,7 +115,7 @@ describe('Bulk Investigate in Timeline', { tags: ['@ess', '@serverless'] }, () =
         const alertCount = alertCountText.split(' ')[1];
         bulkInvestigateSelectedEventsInTimeline();
         cy.get('body').should('contain.text', `${alertCount} event IDs`);
-        cy.get(SERVER_SIDE_EVENT_COUNT).should('contain.text', alertCount);
+        cy.get(QUERY_EVENT_COUNT).should('contain.text', alertCount);
       });
     });
 
@@ -125,7 +126,7 @@ describe('Bulk Investigate in Timeline', { tags: ['@ess', '@serverless'] }, () =
         const alertCount = alertCountText.split(' ')[1];
         bulkInvestigateSelectedEventsInTimeline();
         cy.get('body').should('contain.text', `${alertCount} event IDs`);
-        cy.get(SERVER_SIDE_EVENT_COUNT).should('contain.text', alertCount);
+        cy.get(QUERY_EVENT_COUNT).should('contain.text', alertCount);
       });
     });
   });

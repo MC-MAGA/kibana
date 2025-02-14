@@ -10,9 +10,11 @@ import {
   OBSERVABILITY_ONBOARDING_TEST_PASSWORD,
 } from '@kbn/observability-onboarding-plugin/server/test_helpers/create_observability_onboarding_users/authentication';
 import { createObservabilityOnboardingUsers } from '@kbn/observability-onboarding-plugin/server/test_helpers/create_observability_onboarding_users';
+import { ScoutTestRunConfigCategory } from '@kbn/scout-info';
 import { FtrConfigProviderContext } from '@kbn/test';
 import supertest from 'supertest';
 import { format, UrlObject } from 'url';
+import { createLogger, LogLevel, LogsSynthtraceEsClient } from '@kbn/apm-synthtrace';
 import { ObservabilityOnboardingFtrConfigName } from '../configs';
 import {
   FtrProviderContext,
@@ -64,6 +66,9 @@ export interface CreateTest {
   services: InheritedServices & {
     observabilityOnboardingFtrConfig: () => ObservabilityOnboardingFtrConfig;
     registry: ({ getService }: FtrProviderContext) => ReturnType<typeof RegistryProvider>;
+    logSynthtraceEsClient: (
+      context: InheritedFtrProviderContext
+    ) => Promise<LogsSynthtraceEsClient>;
     observabilityOnboardingApiClient: (
       context: InheritedFtrProviderContext
     ) => ObservabilityOnboardingApiClient;
@@ -90,6 +95,7 @@ export function createTestConfig(
     const esServer = servers.elasticsearch as UrlObject;
 
     return {
+      testConfigCategory: ScoutTestRunConfigCategory.API_TEST,
       testFiles: [require.resolve('../tests')],
       servers,
       servicesRequiredForTestAnalysis: ['observabilityOnboardingFtrConfig', 'registry'],
@@ -97,6 +103,12 @@ export function createTestConfig(
         ...services,
         observabilityOnboardingFtrConfig: () => config,
         registry: RegistryProvider,
+        logSynthtraceEsClient: (context: InheritedFtrProviderContext) =>
+          new LogsSynthtraceEsClient({
+            client: context.getService('es'),
+            logger: createLogger(LogLevel.info),
+            refreshAfterIndex: true,
+          }),
         observabilityOnboardingApiClient: async (_: InheritedFtrProviderContext) => {
           const { username, password } = servers.kibana;
           const esUrl = format(esServer);

@@ -43,6 +43,14 @@
             "section": "def-common.TimeRange",
             "text": "TimeRange"
           },
+          " | undefined, abortController: AbortController | undefined, dataView: ",
+          {
+            "pluginId": "dataViews",
+            "scope": "common",
+            "docId": "kibDataViewsPluginApi",
+            "section": "def-common.DataView",
+            "text": "DataView"
+          },
           " | undefined) => Promise<",
           {
             "pluginId": "expressions",
@@ -128,6 +136,43 @@
             "deprecated": false,
             "trackAdoption": false,
             "isRequired": false
+          },
+          {
+            "parentPluginId": "@kbn/text-based-editor",
+            "id": "def-public.fetchFieldsFromESQL.$4",
+            "type": "Object",
+            "tags": [],
+            "label": "abortController",
+            "description": [],
+            "signature": [
+              "AbortController | undefined"
+            ],
+            "path": "packages/kbn-text-based-editor/src/fetch_fields_from_esql.ts",
+            "deprecated": false,
+            "trackAdoption": false,
+            "isRequired": false
+          },
+          {
+            "parentPluginId": "@kbn/text-based-editor",
+            "id": "def-public.fetchFieldsFromESQL.$5",
+            "type": "Object",
+            "tags": [],
+            "label": "dataView",
+            "description": [],
+            "signature": [
+              {
+                "pluginId": "dataViews",
+                "scope": "common",
+                "docId": "kibDataViewsPluginApi",
+                "section": "def-common.DataView",
+                "text": "DataView"
+              },
+              " | undefined"
+            ],
+            "path": "packages/kbn-text-based-editor/src/fetch_fields_from_esql.ts",
+            "deprecated": false,
+            "trackAdoption": false,
+            "isRequired": false
           }
         ],
         "returnComment": [],
@@ -182,21 +227,23 @@
         "tags": [],
         "label": "TextBasedLanguagesEditorProps",
         "description": [],
-        "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
+        "path": "packages/kbn-text-based-editor/src/types.ts",
         "deprecated": false,
         "trackAdoption": false,
         "children": [
           {
             "parentPluginId": "@kbn/text-based-editor",
             "id": "def-public.TextBasedLanguagesEditorProps.query",
-            "type": "CompoundType",
+            "type": "Object",
             "tags": [],
             "label": "query",
-            "description": [],
-            "signature": [
-              "{ sql: string; } | { esql: string; }"
+            "description": [
+              "The aggregate type query"
             ],
-            "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
+            "signature": [
+              "{ esql: string; }"
+            ],
+            "path": "packages/kbn-text-based-editor/src/types.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -206,7 +253,9 @@
             "type": "Function",
             "tags": [],
             "label": "onTextLangQueryChange",
-            "description": [],
+            "description": [
+              "Callback running everytime the query changes"
+            ],
             "signature": [
               "(query: ",
               {
@@ -218,14 +267,14 @@
               },
               ") => void"
             ],
-            "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
+            "path": "packages/kbn-text-based-editor/src/types.ts",
             "deprecated": false,
             "trackAdoption": false,
             "children": [
               {
                 "parentPluginId": "@kbn/text-based-editor",
                 "id": "def-public.TextBasedLanguagesEditorProps.onTextLangQueryChange.$1",
-                "type": "CompoundType",
+                "type": "Object",
                 "tags": [],
                 "label": "query",
                 "description": [],
@@ -238,7 +287,7 @@
                     "text": "AggregateQuery"
                   }
                 ],
-                "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
+                "path": "packages/kbn-text-based-editor/src/types.ts",
                 "deprecated": false,
                 "trackAdoption": false,
                 "isRequired": true
@@ -252,70 +301,77 @@
             "type": "Function",
             "tags": [],
             "label": "onTextLangQuerySubmit",
-            "description": [],
-            "signature": [
-              "() => void"
+            "description": [
+              "Callback running when the user submits the query"
             ],
-            "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
-            "deprecated": false,
-            "trackAdoption": false,
-            "children": [],
-            "returnComment": []
-          },
-          {
-            "parentPluginId": "@kbn/text-based-editor",
-            "id": "def-public.TextBasedLanguagesEditorProps.expandCodeEditor",
-            "type": "Function",
-            "tags": [],
-            "label": "expandCodeEditor",
-            "description": [],
             "signature": [
-              "(status: boolean) => void"
+              "(query?: ",
+              {
+                "pluginId": "@kbn/es-query",
+                "scope": "common",
+                "docId": "kibKbnEsQueryPluginApi",
+                "section": "def-common.AggregateQuery",
+                "text": "AggregateQuery"
+              },
+              " | undefined, abortController?: AbortController | undefined) => Promise<void>"
             ],
-            "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
+            "path": "packages/kbn-text-based-editor/src/types.ts",
             "deprecated": false,
             "trackAdoption": false,
             "children": [
               {
                 "parentPluginId": "@kbn/text-based-editor",
-                "id": "def-public.TextBasedLanguagesEditorProps.expandCodeEditor.$1",
-                "type": "boolean",
+                "id": "def-public.TextBasedLanguagesEditorProps.onTextLangQuerySubmit.$1",
+                "type": "Object",
                 "tags": [],
-                "label": "status",
+                "label": "query",
                 "description": [],
                 "signature": [
-                  "boolean"
+                  {
+                    "pluginId": "@kbn/es-query",
+                    "scope": "common",
+                    "docId": "kibKbnEsQueryPluginApi",
+                    "section": "def-common.AggregateQuery",
+                    "text": "AggregateQuery"
+                  },
+                  " | undefined"
                 ],
-                "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
+                "path": "packages/kbn-text-based-editor/src/types.ts",
                 "deprecated": false,
                 "trackAdoption": false,
-                "isRequired": true
+                "isRequired": false
+              },
+              {
+                "parentPluginId": "@kbn/text-based-editor",
+                "id": "def-public.TextBasedLanguagesEditorProps.onTextLangQuerySubmit.$2",
+                "type": "Object",
+                "tags": [],
+                "label": "abortController",
+                "description": [],
+                "signature": [
+                  "AbortController | undefined"
+                ],
+                "path": "packages/kbn-text-based-editor/src/types.ts",
+                "deprecated": false,
+                "trackAdoption": false,
+                "isRequired": false
               }
             ],
             "returnComment": []
           },
           {
             "parentPluginId": "@kbn/text-based-editor",
-            "id": "def-public.TextBasedLanguagesEditorProps.isCodeEditorExpanded",
-            "type": "boolean",
+            "id": "def-public.TextBasedLanguagesEditorProps.detectedTimestamp",
+            "type": "string",
             "tags": [],
-            "label": "isCodeEditorExpanded",
-            "description": [],
-            "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
-            "deprecated": false,
-            "trackAdoption": false
-          },
-          {
-            "parentPluginId": "@kbn/text-based-editor",
-            "id": "def-public.TextBasedLanguagesEditorProps.detectTimestamp",
-            "type": "CompoundType",
-            "tags": [],
-            "label": "detectTimestamp",
-            "description": [],
-            "signature": [
-              "boolean | undefined"
+            "label": "detectedTimestamp",
+            "description": [
+              "If it is true, the editor displays the message @timestamp found\nThe text based queries are relying on adhoc dataviews which\ncan have an @timestamp timefield or nothing"
             ],
-            "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
+            "signature": [
+              "string | undefined"
+            ],
+            "path": "packages/kbn-text-based-editor/src/types.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -325,11 +381,13 @@
             "type": "Array",
             "tags": [],
             "label": "errors",
-            "description": [],
+            "description": [
+              "Array of errors"
+            ],
             "signature": [
               "Error[] | undefined"
             ],
-            "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
+            "path": "packages/kbn-text-based-editor/src/types.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -339,11 +397,29 @@
             "type": "string",
             "tags": [],
             "label": "warning",
-            "description": [],
+            "description": [
+              "Warning string as it comes from ES"
+            ],
             "signature": [
               "string | undefined"
             ],
-            "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
+            "path": "packages/kbn-text-based-editor/src/types.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "@kbn/text-based-editor",
+            "id": "def-public.TextBasedLanguagesEditorProps.isLoading",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "isLoading",
+            "description": [
+              "Disables the editor and displays loading icon in run button\nIt is also used for hiding the history component if it is not defined"
+            ],
+            "signature": [
+              "boolean | undefined"
+            ],
+            "path": "packages/kbn-text-based-editor/src/types.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -353,25 +429,13 @@
             "type": "CompoundType",
             "tags": [],
             "label": "isDisabled",
-            "description": [],
+            "description": [
+              "Disables the editor"
+            ],
             "signature": [
               "boolean | undefined"
             ],
-            "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
-            "deprecated": false,
-            "trackAdoption": false
-          },
-          {
-            "parentPluginId": "@kbn/text-based-editor",
-            "id": "def-public.TextBasedLanguagesEditorProps.isDarkMode",
-            "type": "CompoundType",
-            "tags": [],
-            "label": "isDarkMode",
-            "description": [],
-            "signature": [
-              "boolean | undefined"
-            ],
-            "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
+            "path": "packages/kbn-text-based-editor/src/types.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -385,21 +449,7 @@
             "signature": [
               "string | undefined"
             ],
-            "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
-            "deprecated": false,
-            "trackAdoption": false
-          },
-          {
-            "parentPluginId": "@kbn/text-based-editor",
-            "id": "def-public.TextBasedLanguagesEditorProps.hideMinimizeButton",
-            "type": "CompoundType",
-            "tags": [],
-            "label": "hideMinimizeButton",
-            "description": [],
-            "signature": [
-              "boolean | undefined"
-            ],
-            "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
+            "path": "packages/kbn-text-based-editor/src/types.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -409,11 +459,125 @@
             "type": "CompoundType",
             "tags": [],
             "label": "hideRunQueryText",
-            "description": [],
+            "description": [
+              "Hide the Run query information which appears on the footer"
+            ],
             "signature": [
               "boolean | undefined"
             ],
-            "path": "packages/kbn-text-based-editor/src/text_based_languages_editor.tsx",
+            "path": "packages/kbn-text-based-editor/src/types.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "@kbn/text-based-editor",
+            "id": "def-public.TextBasedLanguagesEditorProps.editorIsInline",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "editorIsInline",
+            "description": [
+              "This is used for applications (such as the inline editing flyout in dashboards)\nwhich want to add the editor without being part of the Unified search component\nIt renders a submit query button inside the editor"
+            ],
+            "signature": [
+              "boolean | undefined"
+            ],
+            "path": "packages/kbn-text-based-editor/src/types.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "@kbn/text-based-editor",
+            "id": "def-public.TextBasedLanguagesEditorProps.disableSubmitAction",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "disableSubmitAction",
+            "description": [
+              "Disables the submit query action"
+            ],
+            "signature": [
+              "boolean | undefined"
+            ],
+            "path": "packages/kbn-text-based-editor/src/types.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "@kbn/text-based-editor",
+            "id": "def-public.TextBasedLanguagesEditorProps.allowQueryCancellation",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "allowQueryCancellation",
+            "description": [
+              "when set to true enables query cancellation"
+            ],
+            "signature": [
+              "boolean | undefined"
+            ],
+            "path": "packages/kbn-text-based-editor/src/types.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "@kbn/text-based-editor",
+            "id": "def-public.TextBasedLanguagesEditorProps.hideTimeFilterInfo",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "hideTimeFilterInfo",
+            "description": [
+              "hide @timestamp info"
+            ],
+            "signature": [
+              "boolean | undefined"
+            ],
+            "path": "packages/kbn-text-based-editor/src/types.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "@kbn/text-based-editor",
+            "id": "def-public.TextBasedLanguagesEditorProps.hideQueryHistory",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "hideQueryHistory",
+            "description": [
+              "hide query history"
+            ],
+            "signature": [
+              "boolean | undefined"
+            ],
+            "path": "packages/kbn-text-based-editor/src/types.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "@kbn/text-based-editor",
+            "id": "def-public.TextBasedLanguagesEditorProps.hasOutline",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "hasOutline",
+            "description": [
+              "adds border in the editor"
+            ],
+            "signature": [
+              "boolean | undefined"
+            ],
+            "path": "packages/kbn-text-based-editor/src/types.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "@kbn/text-based-editor",
+            "id": "def-public.TextBasedLanguagesEditorProps.displayDocumentationAsFlyout",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "displayDocumentationAsFlyout",
+            "description": [
+              "adds a documentation icon in the footer which opens the inline docs as a flyout"
+            ],
+            "signature": [
+              "boolean | undefined"
+            ],
+            "path": "packages/kbn-text-based-editor/src/types.ts",
             "deprecated": false,
             "trackAdoption": false
           }

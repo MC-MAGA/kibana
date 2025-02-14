@@ -5,53 +5,29 @@
  * 2.0.
  */
 
-import { EXPAND_ALERT_BTN } from '../../screens/alerts';
+import { EXPAND_ALERT_BTN as TIMELINE_EXPAND_ALERT_BTN } from '../../screens/timeline';
+import { EXPAND_ALERT_BTN as ALERTS_TABLE_EXPAND_ALERT_BTN } from '../../screens/alerts';
 import { DOCUMENT_DETAILS_FLYOUT_FOOTER_ADD_TO_NEW_CASE } from '../../screens/expandable_flyout/alert_details_right_panel';
 import {
-  CREATE_CASE_BUTTON,
   DOCUMENT_DETAILS_FLYOUT_FOOTER_ADD_TO_NEW_CASE_CREATE_BUTTON,
   DOCUMENT_DETAILS_FLYOUT_FOOTER_ADD_TO_NEW_CASE_DESCRIPTION_INPUT,
   DOCUMENT_DETAILS_FLYOUT_FOOTER_ADD_TO_NEW_CASE_NAME_INPUT,
-  KIBANA_NAVBAR_ALERTS_PAGE,
-  KIBANA_NAVBAR_CASES_PAGE,
-  NEW_CASE_CREATE_BUTTON,
-  NEW_CASE_DESCRIPTION_INPUT,
-  NEW_CASE_NAME_INPUT,
+  VIEW_CASE_TOASTER_CLOSE_BUTTON,
   VIEW_CASE_TOASTER_LINK,
 } from '../../screens/expandable_flyout/common';
 import { openTakeActionButtonAndSelectItem } from './alert_details_right_panel';
 
 /**
- * Navigates to the alerts page by clicking on the Kibana sidenav entry
+ * Find the alert row at index in the alerts table then click on the expand icon button to open the flyout
  */
-export const navigateToAlertsPage = () => {
-  cy.get(KIBANA_NAVBAR_ALERTS_PAGE).should('be.visible').click();
+export const expandAlertAtIndexExpandableFlyout = (index = 0) => {
+  cy.get(ALERTS_TABLE_EXPAND_ALERT_BTN).eq(index).click();
 };
-
 /**
- * Navigates to the cases page by clicking on the Kibana sidenav entry
+ * Find the alert row at index in the timeline table then click on the expand icon button to open the flyout
  */
-export const navigateToCasesPage = () => {
-  cy.get(KIBANA_NAVBAR_CASES_PAGE).click();
-};
-
-/**
- * Find the first alert row in the alerts table then click on the expand icon button to open the flyout
- */
-export const expandFirstAlertExpandableFlyout = () => {
-  cy.get(EXPAND_ALERT_BTN).first().click();
-};
-
-/**
- * Create a new case from the cases page
- */
-export const createNewCaseFromCases = () => {
-  cy.get(CREATE_CASE_BUTTON).should('be.visible').click();
-  cy.get(NEW_CASE_NAME_INPUT).should('be.visible').click();
-  cy.get(NEW_CASE_NAME_INPUT).type('case');
-  cy.get(NEW_CASE_DESCRIPTION_INPUT).should('be.visible').click();
-  cy.get(NEW_CASE_DESCRIPTION_INPUT).type('case description');
-  cy.get(NEW_CASE_CREATE_BUTTON).should('be.visible').click();
+export const expandAlertInTimelineAtIndexExpandableFlyout = (index = 0) => {
+  cy.get(TIMELINE_EXPAND_ALERT_BTN).eq(index).click();
 };
 
 /**
@@ -65,4 +41,7 @@ export const createNewCaseFromExpandableFlyout = () => {
 
   // NOTE: wait for case link (case created)
   cy.get(VIEW_CASE_TOASTER_LINK).should('be.visible');
+
+  // NOTE: close pop up to limit interaction with flyout behind
+  cy.get(VIEW_CASE_TOASTER_CLOSE_BUTTON).click();
 };

@@ -7,20 +7,30 @@
 
 import { FtrProviderContext } from '../../ftr_provider_context';
 
-export function MachineLearningNavigationProviderObservability({ getService }: FtrProviderContext) {
+export function MachineLearningNavigationProviderObservability({
+  getService,
+  getPageObject,
+}: FtrProviderContext) {
   const testSubjects = getService('testSubjects');
+  const svlCommonNavigation = getPageObject('svlCommonNavigation');
 
   async function navigateToArea(id: string) {
-    await testSubjects.click('~nav-item-id-observability_project_nav.aiops');
-    await testSubjects.existOrFail(`~nav-item-id-observability_project_nav.aiops.ml:${id}`, {
+    await svlCommonNavigation.sidenav.openPanel('machine_learning-landing', { button: 'link' });
+    await testSubjects.existOrFail(`~panelNavItem-id-ml:${id}`, {
       timeout: 60 * 1000,
     });
-    await testSubjects.click(`~nav-item-id-observability_project_nav.aiops.ml:${id}`);
+    await testSubjects.click(`~panelNavItem-id-ml:${id}`);
   }
 
   return {
     async navigateToAnomalyDetection() {
       await navigateToArea('anomalyDetection');
+    },
+    async navigateToMemoryUsage() {
+      await navigateToArea('memoryUsage');
+    },
+    async navigateToNotifications() {
+      await navigateToArea('notifications');
     },
   };
 }

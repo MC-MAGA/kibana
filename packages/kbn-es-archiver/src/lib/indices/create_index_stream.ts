@@ -1,15 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Transform, Readable } from 'stream';
 import { inspect } from 'util';
 
-import * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
+import * as estypes from '@elastic/elasticsearch/lib/api/types';
 import type { Client } from '@elastic/elasticsearch';
 import { ToolingLog } from '@kbn/tooling-log';
 
@@ -19,7 +20,11 @@ import {
   TASK_MANAGER_SAVED_OBJECT_INDEX,
 } from '@kbn/core-saved-objects-server';
 import { Stats } from '../stats';
-import { cleanSavedObjectIndices, deleteSavedObjectIndices } from './kibana_index';
+import {
+  cleanSavedObjectIndices,
+  deleteSavedObjectIndices,
+  isSavedObjectIndex,
+} from './kibana_index';
 import { deleteIndex } from './delete_index';
 import { deleteDataStream } from './delete_data_stream';
 import { ES_CLIENT_HEADERS } from '../../client_headers';
@@ -37,12 +42,14 @@ export function createCreateIndexStream({
   stats,
   skipExisting = false,
   docsOnly = false,
+  isArchiveInExceptionList = false,
   log,
 }: {
   client: Client;
   stats: Stats;
   skipExisting?: boolean;
   docsOnly?: boolean;
+  isArchiveInExceptionList?: boolean;
   log: ToolingLog;
 }) {
   const skipDocsFromIndices = new Set();
@@ -127,6 +134,16 @@ export function createCreateIndexStream({
 
     if (docsOnly) {
       return;
+    }
+
+    if (isSavedObjectIndex(index) && !isArchiveInExceptionList) {
+      throw new Error(
+        `'esArchiver' no longer supports defining saved object indices, your archive is modifying '${index}'.
+      The recommendation is to use 'kbnArchiver' to import saved objects in your tests.
+      If you absolutely need to load some non-importable SOs, please stick to the official saved object indices created by Kibana at startup.
+      You can achieve that by simply removing your saved object index definitions from 'mappings.json' (likely removing the file altogether).
+      Find more information here: https://github.com/elastic/kibana/issues/161882`
+      );
     }
 
     async function attemptToCreate(attemptNumber = 1) {

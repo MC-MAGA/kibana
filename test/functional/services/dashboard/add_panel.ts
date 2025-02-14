@@ -1,10 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
 import { FtrService } from '../../ftr_provider_context';
 
 export class DashboardAddPanelService extends FtrService {
@@ -16,6 +18,7 @@ export class DashboardAddPanelService extends FtrService {
   private readonly header = this.ctx.getPageObject('header');
   private readonly savedObjectsFinder = this.ctx.getService('savedObjectsFinder');
   private readonly browser = this.ctx.getService('browser');
+  private readonly toasts = this.ctx.getService('toasts');
 
   async clickOpenAddPanel() {
     this.log.debug('DashboardAddPanel.clickOpenAddPanel');
@@ -38,43 +41,51 @@ export class DashboardAddPanelService extends FtrService {
     });
   }
 
-  async clickMarkdownQuickButton() {
+  async clickAddMarkdownPanel() {
     await this.clickEditorMenuButton();
-    await this.clickVisType('markdown');
+    await this.clickAddNewPanelFromUIActionLink('Markdown text');
   }
 
-  async clickMapQuickButton() {
+  async clickAddMapPanel() {
     await this.clickEditorMenuButton();
-    await this.clickVisType('map');
+    await this.clickAddNewPanelFromUIActionLink('Maps');
+  }
+
+  async clickAddLensPanel() {
+    await this.clickEditorMenuButton();
+    await this.clickAddNewPanelFromUIActionLink('Lens');
   }
 
   async clickEditorMenuButton() {
     this.log.debug('DashboardAddPanel.clickEditorMenuButton');
     await this.testSubjects.click('dashboardEditorMenuButton');
-    await this.testSubjects.existOrFail('dashboardEditorContextMenu');
+    await this.testSubjects.existOrFail('dashboardPanelSelectionFlyout');
+    await this.retry.try(async () => {
+      return await this.testSubjects.exists('dashboardPanelSelectionList');
+    });
   }
 
   async expectEditorMenuClosed() {
-    await this.testSubjects.missingOrFail('dashboardEditorContextMenu');
+    await this.testSubjects.missingOrFail('dashboardPanelSelectionFlyout');
   }
 
-  async clickAggBasedVisualizations() {
-    this.log.debug('DashboardAddPanel.clickEditorMenuAggBasedMenuItem');
-    await this.testSubjects.click('dashboardEditorAggBasedMenuItem');
-  }
-
-  async clickVisType(visType: string) {
-    this.log.debug('DashboardAddPanel.clickVisType');
-    await this.testSubjects.click(`visType-${visType}`);
-  }
-
-  async clickEmbeddableFactoryGroupButton(groupId: string) {
-    this.log.debug('DashboardAddPanel.clickEmbeddableFactoryGroupButton');
-    await this.testSubjects.click(`dashboardEditorMenu-${groupId}Group`);
+  async verifyEmbeddableFactoryGroupExists(groupId: string, expectExist: boolean = true) {
+    this.log.debug('DashboardAddPanel.verifyEmbeddableFactoryGroupExists');
+    const testSubject = `dashboardEditorMenu-${groupId}Group`;
+    if (expectExist) {
+      await this.testSubjects.existOrFail(testSubject);
+    } else {
+      await this.testSubjects.missingOrFail(testSubject);
+    }
   }
 
   async clickAddNewEmbeddableLink(type: string) {
     await this.testSubjects.click(`createNew-${type}`);
+  }
+
+  async clickAddNewPanelFromUIActionLink(type: string) {
+    await this.testSubjects.setValue('dashboardPanelSelectionFlyout__searchInput', type);
+    await this.testSubjects.click(`create-action-${type}`);
   }
 
   async addEveryEmbeddableOnCurrentPage() {
@@ -91,7 +102,7 @@ export class DashboardAddPanelService extends FtrService {
           continue;
         }
         await button.click();
-        await this.common.closeToastIfExists();
+
         embeddableList.push(name);
       }
     });
@@ -101,7 +112,7 @@ export class DashboardAddPanelService extends FtrService {
 
   async clickPagerNextButton() {
     // Clear all toasts that could hide pagination controls
-    await this.common.clearAllToasts();
+    await this.toasts.dismissAll();
 
     const addPanel = await this.testSubjects.find('dashboardAddPanel');
 
@@ -191,7 +202,7 @@ export class DashboardAddPanelService extends FtrService {
     if (filter) {
       await this.filterEmbeddableNames(filter.replace('-', ' '));
     }
-    await this.savedObjectsFinder.waitForFilter('Saved search', 'visualization');
+    await this.savedObjectsFinder.waitForFilter('Saved search', 'Visualization');
     let morePages = true;
     while (morePages) {
       searchList.push(await this.addEveryEmbeddableOnCurrentPage());
@@ -226,20 +237,39 @@ export class DashboardAddPanelService extends FtrService {
     return this.addEmbeddable(vizName, 'Visualization');
   }
 
-  async addEmbeddable(embeddableName: string, embeddableType: string) {
+  async addEmbeddable(
+    embeddableName: string,
+    embeddableType?: string,
+    closePanelWhenComplete: boolean = true
+  ) {
     this.log.debug(
       `DashboardAddPanel.addEmbeddable, name: ${embeddableName}, type: ${embeddableType}`
     );
     await this.ensureAddPanelIsShowing();
-    await this.savedObjectsFinder.toggleFilter(embeddableType);
-    await this.savedObjectsFinder.filterEmbeddableNames(`"${embeddableName.replace('-', ' ')}"`);
+    await this.savedObjectsFinder.filterEmbeddableNames(
+      `${embeddableType ? 'type:(' + embeddableType + ') ' : ''}"${embeddableName.replace(
+        '-',
+        ' '
+      )}"`
+    );
     await this.testSubjects.click(`savedObjectTitle${embeddableName.split(' ').join('-')}`);
     await this.testSubjects.exists('addObjectToDashboardSuccess');
-    await this.closeAddPanel();
+    if (closePanelWhenComplete) {
+      await this.closeAddPanel();
+    }
 
     // close "Added successfully" toast
-    await this.common.clearAllToasts();
+    await this.toasts.dismissAll();
     return embeddableName;
+  }
+
+  async addEmbeddables(embeddables: Array<{ name: string; type?: string }>) {
+    const addedEmbeddables: string[] = [];
+    for (const { name, type } of embeddables) {
+      addedEmbeddables.push(await this.addEmbeddable(name, type, false));
+    }
+    await this.closeAddPanel();
+    return addedEmbeddables;
   }
 
   async panelAddLinkExists(name: string) {

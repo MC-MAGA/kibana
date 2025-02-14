@@ -5,10 +5,10 @@
  * 2.0.
  */
 
-import { ELASTIC_HTTP_VERSION_HEADER } from '@kbn/core-http-common';
 import type { SavedQuery } from '@kbn/data-plugin/public';
 import { SAVED_QUERY_BASE_URL } from '@kbn/data-plugin/common/constants';
-import { rootRequest } from '../common';
+import { ELASTIC_HTTP_VERSION_HEADER } from '@kbn/core-http-common';
+import { rootRequest } from './common';
 
 export const createSavedQuery = (
   title: string,
@@ -36,26 +36,40 @@ export const createSavedQuery = (
         },
       ],
     },
-    headers: { 'kbn-xsrf': 'cypress-creds', [ELASTIC_HTTP_VERSION_HEADER]: '1' },
+    headers: {
+      [ELASTIC_HTTP_VERSION_HEADER]: '1',
+    },
+  });
+
+export const getSavedQueries = () =>
+  rootRequest<{ total: number; savedQueries: SavedQuery[] }>({
+    method: 'POST',
+    url: `${SAVED_QUERY_BASE_URL}/_find`,
+    body: {
+      page: 1,
+      perPage: 50,
+      search: '',
+    },
+    headers: {
+      [ELASTIC_HTTP_VERSION_HEADER]: '1',
+    },
   });
 
 export const deleteSavedQueries = () => {
-  const kibanaIndexUrl = `${Cypress.env('ELASTICSEARCH_URL')}/.kibana_\*`;
-  rootRequest({
-    method: 'POST',
-    url: `${kibanaIndexUrl}/_delete_by_query?conflicts=proceed`,
-    body: {
-      query: {
-        bool: {
-          filter: [
-            {
-              match: {
-                type: 'query',
-              },
-            },
-          ],
-        },
-      },
-    },
+  getSavedQueries().then(($response) => {
+    if ($response.body.total !== 0) {
+      const savedQueriesId = $response.body.savedQueries.map((savedQuery) => {
+        return savedQuery.id;
+      });
+      savedQueriesId.forEach((id) => {
+        rootRequest({
+          method: 'DELETE',
+          url: `${SAVED_QUERY_BASE_URL}/${id}`,
+          headers: {
+            [ELASTIC_HTTP_VERSION_HEADER]: '1',
+          },
+        });
+      });
+    }
   });
 };

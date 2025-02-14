@@ -96,7 +96,7 @@ export default ({ getService }: FtrProviderContext) => {
     });
 
     after(async () => {
-      await ml.testResources.deleteIndexPatternByTitle('ft_module_sample_logs');
+      await ml.testResources.deleteDataViewByTitle('ft_module_sample_logs');
       await ml.api.cleanMlIndices();
     });
 
@@ -152,7 +152,6 @@ export default ({ getService }: FtrProviderContext) => {
       ml.api.assertResponseStatusCode(403, status, body);
 
       expect(body.error).to.be('Forbidden');
-      expect(body.message).to.be('Forbidden');
     });
 
     it('should fetch stopped partitions for multiple job ids', async () => {

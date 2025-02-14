@@ -23,14 +23,19 @@ export const RISK_PREVIEW_ERROR_BUTTON = '[data-test-subj="risk-preview-error-bu
 
 export const LOCAL_QUERY_BAR_SELECTOR = getDataTestSubjectSelector('risk-score-preview-search-bar');
 
+export const LOCAL_QUERY_BAR_SEARCH_INPUT_SELECTOR =
+  '[data-test-subj="risk-score-preview-search-bar-input"]';
+
 export const RISK_SCORE_ERROR_PANEL = '[data-test-subj="risk-score-error-panel"]';
-
-export const RISK_SCORE_UPDATE_CANCEL = '[data-test-subj="risk-score-update-cancel"]';
-
-export const RISK_SCORE_UPDATE_CONFIRM = '[data-test-subj="risk-score-update-confirm"]';
-
-export const RISK_SCORE_UPDATE_BUTTON = '[data-test-subj="risk-score-update-button"]';
 
 export const RISK_SCORE_STATUS = '[data-test-subj="risk-score-status"]';
 
+export const RISK_SCORE_STATUS_LOADING = '[data-test-subj="risk-score-status-loading"]';
+
+export const RISK_SCORE_PRIVILEGES_CALLOUT =
+  '[data-test-subj="callout-missing-risk-engine-privileges"]';
+
 export const RISK_SCORE_SWITCH = '[data-test-subj="risk-score-switch"]';
+
+export const RISK_SCORE_PREVIEW_PRIVILEGES_CALLOUT =
+  '[data-test-subj="missing-risk-engine-preview-permissions"]';
